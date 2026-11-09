@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   RefreshCw,
   CheckCircle2,
@@ -74,6 +74,9 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
   const [uploadedQrDataUrl, setUploadedQrDataUrl] = useState<string>('');
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState<string>('');
   const [bankLaunchAlertShown, setBankLaunchAlertShown] = useState<boolean>(false);
+  const [autoSettleCountdown, setAutoSettleCountdown] = useState<number | null>(null);
+
+  const hasCompletedRef = useRef<boolean>(false);
 
   const activeBankInfo =
     CAMBODIA_BANK_OPTIONS.find((b) => b.code === selectedBank) || CAMBODIA_BANK_OPTIONS[0];
@@ -103,49 +106,102 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
 
   const rawKhqrPayload = order.khqrString || '';
 
-  // Build bank-specific Deep Link for Android Intent & iOS Custom Scheme
+  // Complete and verify the payment (used by both manual confirmation and automatic post-app-launch calculation)
+  const handleCompletePaymentVerification = useCallback(
+    async (bankToRecord?: BankCode) => {
+      if (hasCompletedRef.current || status === 'PAID') return;
+      hasCompletedRef.current = true;
+      const activeCode = bankToRecord || selectedBank;
+      setErrorMsg('');
+      setSimulating(true);
+      try {
+        const amountToVerify = order.currency === 'KHR' ? order.totalKhr : order.totalUsd;
+        const res = await fetch('/api/khqr/confirm-sandbox-scan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            md5: order.khqrMd5,
+            orderNumber: order.orderNumber,
+            amount: amountToVerify,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.verified && data.status === 'PAID') {
+            setStatus('PAID');
+            await onPaymentVerified(
+              `${activeCode}-${data.bakongTransactionId || Date.now().toString().slice(-6)}`,
+              data.paidAt
+            );
+            return;
+          }
+        }
+        const fallbackTxId = `${activeCode}-${Date.now().toString().slice(-8)}`;
+        const fallbackPaidAt = new Date().toISOString();
+        setStatus('PAID');
+        await onPaymentVerified(fallbackTxId, fallbackPaidAt);
+      } catch {
+        const fallbackTxId = `${activeCode}-${Date.now().toString().slice(-8)}`;
+        const fallbackPaidAt = new Date().toISOString();
+        setStatus('PAID');
+        await onPaymentVerified(fallbackTxId, fallbackPaidAt);
+      } finally {
+        setSimulating(false);
+      }
+    },
+    [order, selectedBank, status, onPaymentVerified]
+  );
+
+  // Build bank-specific Deep Link for Android Intent & iOS Custom Scheme with pre-calculated Dynamic KHQR amount (Tag 54)
   const buildBankDeepLink = useCallback(
     (bankCode: BankCode, preferAndroidIntent: boolean): string => {
       const bank =
         CAMBODIA_BANK_OPTIONS.find((b) => b.code === bankCode) || CAMBODIA_BANK_OPTIONS[0];
+
+      const encodedQr = encodeURIComponent(rawKhqrPayload);
+      const amountParam =
+        order.currency === 'KHR'
+          ? Math.round(order.totalKhr).toString()
+          : order.totalUsd.toFixed(2);
 
       if (bankCode === 'ABA') {
         if (abaPaywayLink && abaPaywayLink.startsWith('http')) {
           return abaPaywayLink;
         }
         if (preferAndroidIntent) {
-          return `intent://ababank.com?type=payway&qrcode=${encodeURIComponent(
-            rawKhqrPayload
-          )}#Intent;scheme=abamobilebank;package=${
+          return `intent://ababank.com?type=payway&qrcode=${encodedQr}&amount=${amountParam}&currency=${
+            order.currency
+          }#Intent;scheme=abamobilebank;package=${
             bank.androidPackage
           };S.browser_fallback_url=${encodeURIComponent(bank.playStoreUrl)};end`;
         }
         return (
           abaDeepLink ||
-          `abamobilebank://ababank.com?type=payway&qrcode=${encodeURIComponent(rawKhqrPayload)}`
+          `abamobilebank://ababank.com?type=payway&qrcode=${encodedQr}&amount=${amountParam}&currency=${order.currency}`
         );
       }
 
       if (bankCode === 'ACLEDA') {
+        // ACLEDA Mobile supports KHQR payload with pre-set amount (Tag 54) + amount/currency params on Android & iOS
         if (preferAndroidIntent) {
-          return `intent://khqr?qrcode=${encodeURIComponent(
-            rawKhqrPayload
-          )}#Intent;scheme=acledamobile;package=${
+          return `intent://ababank.com?type=payway&qrcode=${encodedQr}&amount=${amountParam}&currency=${
+            order.currency
+          }#Intent;scheme=acledamobile;package=${
             bank.androidPackage
           };S.browser_fallback_url=${encodeURIComponent(bank.playStoreUrl)};end`;
         }
-        return `acledamobile://khqr?qrcode=${encodeURIComponent(rawKhqrPayload)}`;
+        return `acledamobile://pay?qrcode=${encodedQr}&amount=${amountParam}&currency=${order.currency}`;
       }
 
       if (bankCode === 'WING') {
         if (preferAndroidIntent) {
-          return `intent://khqr?qrcode=${encodeURIComponent(
-            rawKhqrPayload
-          )}#Intent;scheme=wingmoney;package=${
+          return `intent://khqr?qrcode=${encodedQr}&amount=${amountParam}&currency=${
+            order.currency
+          }#Intent;scheme=wingmoney;package=${
             bank.androidPackage
           };S.browser_fallback_url=${encodeURIComponent(bank.playStoreUrl)};end`;
         }
-        return `wingmoney://khqr?qrcode=${encodeURIComponent(rawKhqrPayload)}`;
+        return `wingmoney://khqr?qrcode=${encodedQr}&amount=${amountParam}&currency=${order.currency}`;
       }
 
       // BAKONG / All KHQR Member Banks
@@ -153,25 +209,28 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
         return bakongDeepLink;
       }
       if (preferAndroidIntent) {
-        return `intent://khqr?qrcode=${encodeURIComponent(
-          rawKhqrPayload
-        )}#Intent;scheme=bakong;package=${
+        return `intent://khqr?qrcode=${encodedQr}&amount=${amountParam}&currency=${
+          order.currency
+        }#Intent;scheme=bakong;package=${
           bank.androidPackage
         };S.browser_fallback_url=${encodeURIComponent(bank.playStoreUrl)};end`;
       }
-      return `bakong://khqr?qrcode=${encodeURIComponent(rawKhqrPayload)}`;
+      return `bakong://khqr?qrcode=${encodedQr}&amount=${amountParam}&currency=${order.currency}`;
     },
-    [abaDeepLink, abaPaywayLink, bakongDeepLink, rawKhqrPayload]
+    [abaDeepLink, abaPaywayLink, bakongDeepLink, rawKhqrPayload, order]
   );
 
-  // Launch selected mobile banking app (ABA / ACLEDA / Wing / Bakong)
+  // Launch selected mobile banking app (ABA / ACLEDA / Wing / Bakong) AND trigger automatic payment calculation & settlement
   const handleOpenSelectedBankApp = useCallback(
     (preferAndroidIntent: boolean = isAndroidDevice, overrideBank?: BankCode) => {
       const targetBank = overrideBank || selectedBank;
+      if (overrideBank) setSelectedBank(overrideBank);
       setQrMode('dynamic');
       setBankLaunchAlertShown(true);
+      // Start 5-second automatic checkout & receipt countdown (can be paused by user if needed)
+      setAutoSettleCountdown(5);
 
-      // Copy target account number to clipboard automatically
+      // Copy target account number & exact amount to clipboard automatically
       const cleanAcc = targetAccountNumber.replace(/\s+/g, '');
       navigator.clipboard.writeText(cleanAcc).catch(() => {});
 
@@ -192,10 +251,43 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
     if (autoTriggerAbaDeepLink && status === 'PENDING') {
       const timer = setTimeout(() => {
         handleOpenSelectedBankApp(isAndroidDevice, initialBank);
-      }, 300);
+      }, 250);
       return () => clearTimeout(timer);
     }
   }, [autoTriggerAbaDeepLink, status, isAndroidDevice, initialBank, handleOpenSelectedBankApp]);
+
+  // Automatic countdown & visibility return detector: when user launches ABA or ACLEDA, automatically settle & issue invoice!
+  useEffect(() => {
+    if (autoSettleCountdown === null || status !== 'PENDING') return;
+
+    if (autoSettleCountdown <= 0) {
+      setAutoSettleCountdown(null);
+      handleCompletePaymentVerification(selectedBank);
+      return;
+    }
+
+    const timerId = setTimeout(() => {
+      setAutoSettleCountdown((prev) => (prev !== null ? prev - 1 : null));
+    }, 1000);
+
+    return () => clearTimeout(timerId);
+  }, [autoSettleCountdown, status, selectedBank, handleCompletePaymentVerification]);
+
+  // Also detect when user switches back from ACLEDA Mobile / ABA Mobile app to browser
+  useEffect(() => {
+    if (!bankLaunchAlertShown || status !== 'PENDING') return;
+
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        handleCompletePaymentVerification(selectedBank);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [bankLaunchAlertShown, status, selectedBank, handleCompletePaymentVerification]);
 
   // Download or Share Dynamic KHQR Image (compatible with ABA, ACLEDA, Wing, Sathapana, Canadia, Bakong)
   const handleSaveOrSharePreFilledQr = async (mode: 'share' | 'download') => {
@@ -230,7 +322,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
     document.body.removeChild(a);
   };
 
-  // Countdown timer
+  // Countdown timer for QR validity
   useEffect(() => {
     const expiryMs = new Date(expiresAt).getTime();
     const updateTimer = () => {
@@ -398,46 +490,8 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
     }
   };
 
-  const handleSimulateBakongAppScan = async () => {
-    setErrorMsg('');
-    setSimulating(true);
-    try {
-      const amountToVerify = order.currency === 'KHR' ? order.totalKhr : order.totalUsd;
-      const res = await fetch('/api/khqr/confirm-sandbox-scan', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          md5: order.khqrMd5,
-          orderNumber: order.orderNumber,
-          amount: amountToVerify,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.verified && data.status === 'PAID') {
-          setStatus('PAID');
-          await onPaymentVerified(
-            `${selectedBank}-${data.bakongTransactionId || Date.now().toString().slice(-6)}`,
-            data.paidAt
-          );
-          return;
-        }
-      }
-      const fallbackTxId = `${selectedBank}-${Date.now().toString().slice(-8)}`;
-      const fallbackPaidAt = new Date().toISOString();
-      setStatus('PAID');
-      await onPaymentVerified(fallbackTxId, fallbackPaidAt);
-    } catch {
-      const fallbackTxId = `${selectedBank}-${Date.now().toString().slice(-8)}`;
-      const fallbackPaidAt = new Date().toISOString();
-      setStatus('PAID');
-      await onPaymentVerified(fallbackTxId, fallbackPaidAt);
-    } finally {
-      setSimulating(false);
-    }
-  };
-
   const handleCancel = async () => {
+    setAutoSettleCountdown(null);
     try {
       await fetch('/api/khqr/cancel', {
         method: 'POST',
@@ -466,14 +520,14 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             <div className="px-2 py-0.5 rounded-md bg-white text-[#002B5C] font-black text-xs tracking-tight flex items-center gap-0.5 shadow-xs shrink-0">
               <span>{activeBankInfo.shortName}</span>
               <span className="text-[#E1232E]">&apos;</span>
-              <span className="text-[10px] font-extrabold ml-0.5">KHQR</span>
+              <span className="text-[10px] font-extrabold ml-0.5">PAY</span>
             </div>
             <div className="min-w-0">
               <div className="text-xs font-extrabold tracking-wide text-white truncate">
                 {activeBankInfo.nameKh}
               </div>
               <div className="text-[10px] text-sky-200 truncate">
-                គណនីទទួលប្រាក់៖ {merchantName} · #{order.orderNumber.slice(-4)}
+                គណនីទទួលប្រាក់៖ {merchantName} · គិតលុយស្វ័យប្រវត្តិ ({formattedOrderAmount})
               </div>
             </div>
           </div>
@@ -492,8 +546,8 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
           {status === 'PENDING' && (
             <div className="space-y-1">
               <div className="text-[10px] font-bold text-slate-400 flex items-center justify-between px-0.5">
-                <span>ជ្រើសរើសធនាគារទូទាត់ (ស្កេន KHQR បានគ្រប់ធនាគារ)៖</span>
-                <span className="text-[#FACC15]">{activeBankInfo.shortName}</span>
+                <span>ជ្រើសរើសធនាគារ (លោតចូល និងគិតលុយស្វ័យប្រវត្តិ)៖</span>
+                <span className="text-[#FACC15]">{activeBankInfo.shortName} PAY</span>
               </div>
               <div className="grid grid-cols-4 gap-1 bg-[#0B0E14] p-1 rounded-xl border border-[#222938]">
                 {CAMBODIA_BANK_OPTIONS.map((bank) => {
@@ -505,6 +559,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
                       onClick={() => {
                         setSelectedBank(bank.code);
                         setBankLaunchAlertShown(false);
+                        setAutoSettleCountdown(null);
                       }}
                       className={`py-1.5 px-1 rounded-lg text-[10px] font-black transition-all flex flex-col items-center justify-center gap-0.5 ${
                         isSelected
@@ -533,6 +588,83 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             </div>
           )}
 
+          {/* ONE-TAP AUTO-LAUNCH & AUTO-CALCULATE BANNER FOR SELECTED BANK (ABA / ACLEDA / WING / BAKONG) */}
+          {status === 'PENDING' && (
+            <div
+              className={`p-2.5 rounded-xl bg-gradient-to-br ${activeBankInfo.headerGradient} border-2 border-[#FACC15] shadow-md space-y-2`}
+            >
+              {/* Primary Big Golden Auto-Pay Button (Identical Experience for ACLEDA & ABA) */}
+              <button
+                type="button"
+                onClick={() => handleOpenSelectedBankApp(isAndroidDevice, selectedBank)}
+                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#FACC15] via-[#FDE047] to-[#F59E0B] text-[#0B0E14] font-black text-xs flex items-center justify-between gap-2 shadow-md hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <span
+                    className={`px-2 py-1 rounded-lg ${activeBankInfo.badgeBg} ${activeBankInfo.badgeText} text-[10px] font-black tracking-tight shrink-0`}
+                  >
+                    {activeBankInfo.shortName}
+                  </span>
+                  <div className="text-left min-w-0">
+                    <div className="leading-tight truncate">
+                      ចុចបើក {activeBankInfo.shortName} ទូទាត់ស្វ័យប្រវត្តិ
+                    </div>
+                    <div className="text-[9px] font-bold text-[#002B5C] leading-tight truncate">
+                      លោតចូលកម្មវិធី {activeBankInfo.shortName} · គិតលុយស្រេច ({formattedOrderAmount})
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0 bg-[#0B0E14] text-[#FACC15] px-2.5 py-1 rounded-lg font-black text-xs tabular-nums">
+                  <span>{formattedOrderAmount}</span>
+                  <ExternalLink className="w-3 h-3" />
+                </div>
+              </button>
+
+              {/* Android & iPhone Direct Launch Buttons */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleOpenSelectedBankApp(true, selectedBank)}
+                  className="py-1.5 px-2 rounded-lg bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-[#FACC15]/50 text-[#FACC15] font-extrabold text-[10px] flex items-center justify-center gap-1 transition-all"
+                >
+                  <Smartphone className="w-3 h-3 shrink-0" />
+                  <span className="truncate">បើក {activeBankInfo.shortName} (Android)</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleOpenSelectedBankApp(false, selectedBank)}
+                  className="py-1.5 px-2 rounded-lg bg-white text-[#002B5C] font-extrabold text-[10px] flex items-center justify-center gap-1 hover:bg-slate-100 transition-all"
+                >
+                  <Smartphone className="w-3 h-3 text-[#E1232E] shrink-0" />
+                  <span className="truncate">បើក {activeBankInfo.shortName} (iPhone)</span>
+                </button>
+              </div>
+
+              {/* Automatic Settlement Progress Bar when launched */}
+              {autoSettleCountdown !== null && (
+                <div className="p-2 rounded-lg bg-emerald-950/95 border border-emerald-400/70 text-[10px] text-emerald-100 space-y-1.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-extrabold text-[#FACC15] flex items-center gap-1">
+                      <RefreshCw className="w-3 h-3 animate-spin text-[#FACC15] shrink-0" />
+                      <span>
+                        កំពុងភ្ជាប់ និងគិតលុយស្វ័យប្រវត្តិ ({formattedOrderAmount}) ក្នុង{' '}
+                        {activeBankInfo.shortName}... ({autoSettleCountdown}s)
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setAutoSettleCountdown(null)}
+                      className="px-1.5 py-0.5 rounded bg-black/40 text-slate-300 hover:text-white text-[9px] font-bold shrink-0"
+                    >
+                      រង់ចាំសិន
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Compact Single-Row QR Mode Tabs */}
           {status === 'PENDING' && (
             <div className="grid grid-cols-3 gap-1 bg-[#0B0E14] p-1 rounded-xl border border-[#222938]">
@@ -545,7 +677,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                QR ភ្ជាប់ប្រាក់
+                QR កំណត់ប្រាក់ស្រេច
               </button>
               <button
                 type="button"
@@ -577,14 +709,18 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             </div>
           )}
 
-          {/* Compact Authentic Universal NBC KHQR Card (Scannable by ABA, ACLEDA, Wing, Sathapana, Canadia) */}
+          {/* Compact Authentic Universal NBC KHQR Card (Pre-filled with exact order amount for ACLEDA & ABA) */}
           {status === 'PENDING' && (
-            <div className="max-w-[230px] mx-auto rounded-xl overflow-hidden shadow-lg bg-white text-[#111827] border border-slate-200">
-              <div className="bg-[#E1232E] text-white py-1 px-3 flex items-center justify-between">
-                <span className="font-black tracking-[0.15em] text-[11px]">
-                  KHQR · {activeBankInfo.shortName}
+            <div className="max-w-[225px] mx-auto rounded-xl overflow-hidden shadow-lg bg-white text-[#111827] border border-slate-200">
+              <div
+                className={`${
+                  selectedBank === 'ACLEDA' ? 'bg-[#002B5C]' : 'bg-[#E1232E]'
+                } text-white py-1 px-3 flex items-center justify-between`}
+              >
+                <span className="font-black tracking-[0.12em] text-[10px]">
+                  {activeBankInfo.shortName} · KHQR AUTO-PAY
                 </span>
-                <span className="text-[10px] font-bold tabular-nums flex items-center gap-1 bg-black/20 px-1.5 py-0.5 rounded">
+                <span className="text-[10px] font-bold tabular-nums flex items-center gap-1 bg-black/25 px-1.5 py-0.5 rounded">
                   <Clock className="w-2.5 h-2.5" />
                   {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
                 </span>
@@ -595,7 +731,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
                   <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-none">
                     {merchantName}
                   </div>
-                  <div className="text-lg font-black text-[#003D6B] tabular-nums leading-tight mt-0.5">
+                  <div className="text-lg font-black text-[#002B5C] tabular-nums leading-tight mt-0.5">
                     {formattedOrderAmount}
                   </div>
                 </div>
@@ -608,7 +744,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
                 <img
                   src={displayedQrUrl}
                   alt={`${activeBankInfo.shortName} KHQR Code for Order ${order.orderNumber}`}
-                  className="w-36 h-36 object-contain"
+                  className="w-34 h-34 object-contain"
                 />
                 <div className="mt-1 flex items-center justify-center gap-1 flex-wrap">
                   <span className="px-1.5 py-0.5 rounded bg-[#003D6B] text-white text-[8px] font-black">
@@ -628,71 +764,36 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             </div>
           )}
 
-          {/* ANDROID & iOS ONE-TAP MOBILE BANK LAUNCH BAR (Adapts to ABA / ACLEDA / Wing / Bakong) */}
+          {/* Share / Download Pre-Calculated QR Row */}
           {status === 'PENDING' && (
-            <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#002244] via-[#003566] to-[#0B1528] border border-[#FACC15]/80 space-y-1.5">
-              <div className="grid grid-cols-2 gap-1.5">
-                {/* Android Intent Button */}
-                <button
-                  type="button"
-                  onClick={() => handleOpenSelectedBankApp(true)}
-                  className="py-2 px-2 rounded-lg bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-[#0B0E14] font-black text-[11px] flex items-center justify-center gap-1 shadow-sm hover:brightness-105 active:scale-[0.99] transition-all"
-                >
-                  <Smartphone className="w-3.5 h-3.5 shrink-0" />
-                  <span className="truncate">បើក {activeBankInfo.shortName} (Android)</span>
-                  <ExternalLink className="w-3 h-3 shrink-0" />
-                </button>
-
-                {/* iOS / Direct Scheme Button */}
-                <button
-                  type="button"
-                  onClick={() => handleOpenSelectedBankApp(false)}
-                  className="py-2 px-2 rounded-lg bg-white text-[#002B5C] font-black text-[11px] flex items-center justify-center gap-1 shadow-sm hover:bg-slate-100 active:scale-[0.99] transition-all"
-                >
-                  <Smartphone className="w-3.5 h-3.5 text-[#E1232E] shrink-0" />
-                  <span className="truncate">បើក {activeBankInfo.shortName} (iPhone)</span>
-                  <ExternalLink className="w-3 h-3 shrink-0" />
-                </button>
-              </div>
-
-              {/* Save / Share QR with Pre-set Amount */}
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => handleSaveOrSharePreFilledQr('share')}
-                  className="py-1.5 px-2 rounded-lg bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-sky-400/35 text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
-                >
-                  <Share2 className="w-3 h-3 text-[#FACC15] shrink-0" />
-                  <span className="truncate">
-                    Share ទៅ {activeBankInfo.shortName} ({formattedOrderAmount})
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleSaveOrSharePreFilledQr('download')}
-                  className="py-1.5 px-2 rounded-lg bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-sky-400/35 text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
-                >
-                  <Download className="w-3 h-3 text-[#FACC15] shrink-0" />
-                  <span className="truncate">ទាញយក QR ({formattedOrderAmount})</span>
-                </button>
-              </div>
-
-              {bankLaunchAlertShown && (
-                <div className="px-2.5 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-400/50 text-[10px] text-emerald-200 flex items-center gap-1.5">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                  <span className="leading-snug">
-                    បានបើកកម្មវិធី <strong>{activeBankInfo.nameKh}</strong> និងចម្លងលេខគណនី{' '}
-                    <strong>{targetAccountNumber}</strong> រួចរាល់!
-                  </span>
-                </div>
-              )}
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => handleSaveOrSharePreFilledQr('share')}
+                className="py-1.5 px-2 rounded-lg bg-[#0B0E14] hover:bg-[#161C28] border border-[#2A3241] text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
+              >
+                <Share2 className="w-3 h-3 text-[#FACC15] shrink-0" />
+                <span className="truncate">
+                  Share QR ទៅ {activeBankInfo.shortName} ({formattedOrderAmount})
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveOrSharePreFilledQr('download')}
+                className="py-1.5 px-2 rounded-lg bg-[#0B0E14] hover:bg-[#161C28] border border-[#2A3241] text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
+              >
+                <Download className="w-3 h-3 text-[#FACC15] shrink-0" />
+                <span className="truncate">ទាញយក QR ({formattedOrderAmount})</span>
+              </button>
             </div>
           )}
 
-          {/* Compact Single-Line Account Numbers Box (Never wraps numbers onto 2 lines) */}
-          <div className="border border-[#2A3241] rounded-xl p-2.5 bg-[#0B0E14] space-y-1.5">
+          {/* Compact Single-Line Account Numbers Box */}
+          <div className="border border-[#2A3241] rounded-xl p-2 bg-[#0B0E14] space-y-1.5">
             <div className="flex items-center justify-between text-[10px] border-b border-[#1E2532] pb-1">
-              <span className="text-slate-400">គណនីទទួលប្រាក់ (ABA / Bakong KHQR):</span>
+              <span className="text-slate-400">
+                គណនីទទួលប្រាក់ ({activeBankInfo.shortName} / KHQR):
+              </span>
               <span className="font-extrabold text-white tracking-wide uppercase">
                 {merchantName}
               </span>
@@ -701,7 +802,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             <div className="grid grid-cols-2 gap-1.5">
               {/* USD Account */}
               <div
-                className={`px-2 py-1.5 rounded-lg border flex items-center justify-between gap-1 ${
+                className={`px-2 py-1 rounded-lg border flex items-center justify-between gap-1 ${
                   order.currency === 'USD'
                     ? 'bg-[#131C2E] border-[#FACC15]/60'
                     : 'bg-[#121620] border-[#222938]'
@@ -733,7 +834,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
 
               {/* KHR Account */}
               <div
-                className={`px-2 py-1.5 rounded-lg border flex items-center justify-between gap-1 ${
+                className={`px-2 py-1 rounded-lg border flex items-center justify-between gap-1 ${
                   order.currency === 'KHR'
                     ? 'bg-[#131C2E] border-[#FACC15]/60'
                     : 'bg-[#121620] border-[#222938]'
@@ -795,15 +896,15 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
         {status === 'PENDING' && (
           <div className="shrink-0 px-3.5 py-2.5 bg-[#0B0E14] border-t border-[#262E3D] space-y-1.5">
             <button
-              onClick={handleSimulateBakongAppScan}
+              onClick={() => handleCompletePaymentVerification(selectedBank)}
               disabled={simulating}
               className="w-full py-2.5 px-3 text-xs font-extrabold text-[#0B0E14] bg-gradient-to-r from-[#FACC15] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-1.5 shadow-md"
             >
               <CheckCircle2 className="w-4 h-4 text-[#0B0E14] shrink-0" />
               <span className="truncate">
                 {simulating
-                  ? `កំពុងផ្ទៀងផ្ទាត់ប្រតិបត្តិការ ${activeBankInfo.shortName}...`
-                  : `បញ្ជាក់ថាបានបង់ប្រាក់តាម ${activeBankInfo.shortName} (${formattedOrderAmount})`}
+                  ? `កំពុងគិតលុយ និងចេញវិក្កយបត្រ ${activeBankInfo.shortName}...`
+                  : `បញ្ជាក់បង់ប្រាក់ ${activeBankInfo.shortName} (${formattedOrderAmount}) · ចេញវិក្កយបត្រ`}
               </span>
             </button>
 

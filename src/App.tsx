@@ -718,6 +718,14 @@ export default function App() {
         // Non-fatal
       }
 
+      const resolvedPaymentMethodLabel = bakongTransactionId.startsWith('ACLEDA')
+        ? 'ACLEDA Mobile (KHQR)'
+        : bakongTransactionId.startsWith('WING')
+        ? 'Wing Bank (KHQR)'
+        : bakongTransactionId.startsWith('BAKONG')
+        ? 'Bakong KHQR'
+        : 'ABA PAY (ABA KHQR)';
+
       const generatedInvoice: Invoice = {
         id: `inv_${order.id}`,
         invoiceNumber: order.invoiceNumber,
@@ -729,7 +737,7 @@ export default function App() {
         discountUsd: order.discountUsd,
         totalUsd: order.totalUsd,
         totalKhr: order.totalKhr,
-        paymentMethod: 'ABA_KHQR',
+        paymentMethod: resolvedPaymentMethodLabel,
         paymentStatus: 'PAID',
         bakongTransactionId,
         issuedAt: paidAt || new Date().toISOString(),
