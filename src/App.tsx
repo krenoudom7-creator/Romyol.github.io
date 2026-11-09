@@ -63,6 +63,7 @@ import { InvoiceModal } from './components/InvoiceModal';
 import { DrinkCustomizationModal } from './components/DrinkCustomizationModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { playOrderNotificationSound } from './lib/soundAndExport';
+import { generateClientSideAbaKhqrFallback } from './lib/clientKhqrFallback';
 
 const HERO_SLIDES = [
   {
@@ -526,21 +527,33 @@ export default function App() {
       const orderNumber = `VMC-${dateStamp}-${randomSuffix}`;
       const invoiceNumber = `INV-${dateStamp}-${randomSuffix}`;
 
-      const khqrRes = await fetch('/api/khqr/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      let khqrData: any = null;
+      try {
+        const khqrRes = await fetch('/api/khqr/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderNumber,
+            amountUsd: cartSummary.totalUsd,
+            amountKhr: cartSummary.totalKhr,
+            currency,
+            originUrl: window.location.origin,
+          }),
+        });
+        if (khqrRes.ok) {
+          khqrData = await khqrRes.json();
+        }
+      } catch {
+        // Fallback below for static hosts (e.g. GitHub Pages)
+      }
+
+      if (!khqrData) {
+        khqrData = await generateClientSideAbaKhqrFallback({
           orderNumber,
           amountUsd: cartSummary.totalUsd,
           amountKhr: cartSummary.totalKhr,
           currency,
-          originUrl: window.location.origin,
-        }),
-      });
-
-      const khqrData = await khqrRes.json();
-      if (!khqrRes.ok) {
-        throw new Error(khqrData.error || 'មិនអាចបង្កើតកូដ KHQR បានទេ។');
+        });
       }
 
       const lineItems: OrderLineItem[] = cart.map((c) => {
@@ -742,19 +755,33 @@ export default function App() {
   }, [activeKhqrSession]);
 
   const handleResumeKhqrForOrder = async (order: Order) => {
-    const khqrRes = await fetch('/api/khqr/create', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+    let khqrData: any = null;
+    try {
+      const khqrRes = await fetch('/api/khqr/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderNumber: order.orderNumber,
+          amountUsd: order.totalUsd,
+          amountKhr: order.totalKhr,
+          currency: order.currency,
+          originUrl: window.location.origin,
+        }),
+      });
+      if (khqrRes.ok) {
+        khqrData = await khqrRes.json();
+      }
+    } catch {
+      // Fallback below for static hosts
+    }
+    if (!khqrData) {
+      khqrData = await generateClientSideAbaKhqrFallback({
         orderNumber: order.orderNumber,
         amountUsd: order.totalUsd,
         amountKhr: order.totalKhr,
         currency: order.currency,
-        originUrl: window.location.origin,
-      }),
-    });
-    if (!khqrRes.ok) return;
-    const khqrData = await khqrRes.json();
+      });
+    }
     setActiveKhqrSession({
       order: { ...order, khqrMd5: khqrData.md5, khqrString: khqrData.khqrString },
       qrDataUrl: khqrData.qrDataUrl,

@@ -1,6 +1,12 @@
 import React, { useState } from 'react';
 import { Coffee } from 'lucide-react';
 
+// Bundle local product images so they work both in dev server and static builds (e.g. GitHub Pages)
+const bundledImages = import.meta.glob('/src/assets/images/*', {
+  eager: true,
+  import: 'default',
+}) as Record<string, string>;
+
 interface ProductImageProps {
   src: string;
   alt: string;
@@ -10,7 +16,9 @@ interface ProductImageProps {
 export const ProductImage: React.FC<ProductImageProps> = ({ src, alt, className = '' }) => {
   const [hasError, setHasError] = useState(false);
 
-  if (!src || hasError) {
+  const resolvedSrc = bundledImages[src] || src;
+
+  if (!resolvedSrc || hasError) {
     return (
       <div
         className={`flex flex-col items-center justify-center bg-gradient-to-br from-[#141923] via-[#1C2230] to-[#0E121A] text-[#FACC15] p-4 ${className}`}
@@ -25,7 +33,7 @@ export const ProductImage: React.FC<ProductImageProps> = ({ src, alt, className 
 
   return (
     <img
-      src={src}
+      src={resolvedSrc}
       alt={alt}
       referrerPolicy="no-referrer"
       onError={() => setHasError(true)}
