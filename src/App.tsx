@@ -52,6 +52,8 @@ import {
   LoyaltyMember,
   ExpenseRecord,
   CurrencyCode,
+  BankCode,
+  CAMBODIA_BANK_OPTIONS,
   EXCHANGE_RATE_KHR,
   formatUsd,
   formatKhr,
@@ -135,9 +137,10 @@ export default function App() {
   const [appliedPromo, setAppliedPromo] = useState<PromoCode | null>(null);
   const [promoFeedback, setPromoFeedback] = useState<string>('');
   const [redeemLoyaltyReward, setRedeemLoyaltyReward] = useState<boolean>(false);
+  const [selectedCheckoutBank, setSelectedCheckoutBank] = useState<BankCode>('ABA');
   const [submittingOrder, setSubmittingOrder] = useState<boolean>(false);
 
-  // Active ABA PAY / KHQR Payment Session & Invoice Modal
+  // Active ABA / ACLEDA / Wing / Bakong KHQR Payment Session & Invoice Modal
   const [activeKhqrSession, setActiveKhqrSession] = useState<{
     order: Order;
     qrDataUrl: string;
@@ -147,6 +150,7 @@ export default function App() {
     bakongDeepLink?: string;
     abaPaywayLink?: string;
     autoTriggerAbaDeepLink?: boolean;
+    initialBank?: BankCode;
     expiresAt: string;
     merchantName: string;
     merchantAccount: string;
@@ -583,6 +587,7 @@ export default function App() {
 
       const noteParts = [
         orderNote.trim(),
+        `[Bank: ${selectedCheckoutBank}]`,
         appliedPromo ? `[Promo: ${appliedPromo.code}]` : '',
         redeemLoyaltyReward ? '[Loyalty -10 pts]' : '',
       ].filter(Boolean);
@@ -602,7 +607,7 @@ export default function App() {
         totalUsd: cartSummary.totalUsd,
         totalKhr: cartSummary.totalKhr,
         currency,
-        paymentMethod: 'ABA_KHQR',
+        paymentMethod: selectedCheckoutBank === 'ABA' ? 'ABA_KHQR' : 'KHQR_BAKONG',
         paymentStatus: 'PENDING',
         orderStatus: 'WAITING_PAYMENT',
         khqrMd5: khqrData.md5,
@@ -624,6 +629,7 @@ export default function App() {
         bakongDeepLink: khqrData.bakongDeepLink,
         abaPaywayLink: khqrData.abaPaywayLink,
         autoTriggerAbaDeepLink: autoOpenAbaMobile,
+        initialBank: selectedCheckoutBank,
         expiresAt: khqrData.expiresAt,
         merchantName: khqrData.merchantName,
         merchantAccount: khqrData.merchantAccount,
@@ -1799,9 +1805,9 @@ export default function App() {
               )}
             </div>
 
-            {/* Compact Cart Footer Totals & KHQR Checkout Buttons */}
+            {/* Compact Cart Footer Totals, Multi-Bank Selector & KHQR Checkout Buttons */}
             {cart.length > 0 && (
-              <div className="shrink-0 p-4 bg-[#0B0E14] border-t border-[#262E3D] space-y-2.5">
+              <div className="shrink-0 p-3.5 bg-[#0B0E14] border-t border-[#262E3D] space-y-2.5">
                 <div className="space-y-1 text-xs">
                   {cartSummary.discountUsd > 0 && (
                     <div className="flex justify-between text-emerald-400 text-[11px] font-medium">
@@ -1822,35 +1828,83 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 gap-2">
-                  {/* Button 1: One-Tap Direct Alert into ABA Mobile with Pre-Set Amount */}
+                {/* Multi-Bank Selector (ABA, ACLEDA, Wing, Bakong KHQR) */}
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold text-slate-400 flex items-center justify-between">
+                    <span>ជ្រើសរើសធនាគារទូទាត់ប្រាក់៖</span>
+                    <span className="text-[#FACC15]">
+                      {
+                        CAMBODIA_BANK_OPTIONS.find((b) => b.code === selectedCheckoutBank)
+                          ?.nameKh
+                      }
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {CAMBODIA_BANK_OPTIONS.map((bank) => {
+                      const isSelected = selectedCheckoutBank === bank.code;
+                      return (
+                        <button
+                          key={bank.code}
+                          type="button"
+                          onClick={() => setSelectedCheckoutBank(bank.code)}
+                          className={`py-1.5 px-1 rounded-lg border text-[10px] font-black transition-all flex flex-col items-center justify-center gap-0.5 ${
+                            isSelected
+                              ? 'bg-[#FACC15] text-[#0B0E14] border-[#FACC15] shadow-xs'
+                              : 'bg-[#131722] text-slate-300 border-[#262E3D] hover:border-slate-500'
+                          }`}
+                        >
+                          <span className="leading-none">{bank.shortName}</span>
+                          <span
+                            className={`text-[8px] font-bold leading-none ${
+                              isSelected ? 'text-[#002B5C]' : 'text-slate-400'
+                            }`}
+                          >
+                            {bank.code === 'ABA'
+                              ? 'ABA Pay'
+                              : bank.code === 'ACLEDA'
+                              ? 'អេស៊ីលីដា'
+                              : bank.code === 'WING'
+                              ? 'វីង'
+                              : 'គ្រប់ធនាគារ'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-1.5">
+                  {/* Button 1: One-Tap Direct Alert into Selected Bank App with Pre-Set Amount */}
                   <button
                     type="button"
                     disabled={submittingOrder}
                     onClick={() => handleInitiateKhqrPayment(undefined, true)}
                     className="w-full py-2.5 px-3 text-xs font-black text-[#0B0E14] bg-gradient-to-r from-[#FACC15] via-[#FDE047] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-2 shadow-md"
                   >
-                    <span className="px-1.5 py-0.5 rounded bg-[#003D6B] text-white text-[10px] font-black tracking-tight shrink-0">
-                      ABA<span className="text-[#E1232E]">&apos;</span>
+                    <span className="px-1.5 py-0.5 rounded bg-[#002B5C] text-white text-[10px] font-black tracking-tight shrink-0">
+                      {selectedCheckoutBank}
                     </span>
                     <Smartphone className="w-3.5 h-3.5 text-[#0B0E14] shrink-0" />
                     <span className="truncate">
                       {submittingOrder
-                        ? 'កំពុងភ្ជាប់ទៅ ABA Mobile...'
-                        : `ចុចបើក ABA Mobile ទូទាត់ភ្លាម (${formatDisplayPrice(cartSummary.totalUsd)})`}
+                        ? `កំពុងភ្ជាប់ទៅ ${selectedCheckoutBank}...`
+                        : `ចុចបើក ${selectedCheckoutBank} ទូទាត់ភ្លាម (${formatDisplayPrice(
+                            cartSummary.totalUsd
+                          )})`}
                     </span>
                   </button>
 
-                  {/* Button 2: Show ABA KHQR Code for Scanning */}
+                  {/* Button 2: Show KHQR Code for Scanning with Selected Bank */}
                   <button
                     type="submit"
                     form="checkout-form"
                     disabled={submittingOrder}
-                    className="w-full py-2.5 px-3 text-xs font-extrabold text-white bg-gradient-to-r from-[#003D6B] via-[#004F8B] to-[#002B4D] border border-[#0066B2] rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-sm"
+                    className="w-full py-2 px-3 text-xs font-extrabold text-white bg-gradient-to-r from-[#003D6B] via-[#004F8B] to-[#002B4D] border border-[#0066B2] rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-sm"
                   >
                     <QrCode className="w-3.5 h-3.5 text-[#FACC15] shrink-0" />
                     <span className="truncate">
-                      បង្ហាញកូដ ABA KHQR សម្រាប់ស្កេន ({formatDisplayPrice(cartSummary.totalUsd)})
+                      បង្ហាញកូដ {selectedCheckoutBank} KHQR សម្រាប់ស្កេន (
+                      {formatDisplayPrice(cartSummary.totalUsd)})
                     </span>
                   </button>
                 </div>
@@ -1861,7 +1915,7 @@ export default function App() {
       )}
 
       {/* =====================================================================
-          OFFICIAL ABA PAY & KHQR BAKONG PAYMENT MODAL
+          OFFICIAL MULTI-BANK (ABA, ACLEDA, WING, BAKONG) KHQR PAYMENT MODAL
          ===================================================================== */}
       {activeKhqrSession && (
         <KhqrPaymentModal
@@ -1873,6 +1927,7 @@ export default function App() {
           bakongDeepLink={activeKhqrSession.bakongDeepLink}
           abaPaywayLink={activeKhqrSession.abaPaywayLink}
           autoTriggerAbaDeepLink={activeKhqrSession.autoTriggerAbaDeepLink}
+          initialBank={activeKhqrSession.initialBank || selectedCheckoutBank}
           expiresAt={activeKhqrSession.expiresAt}
           merchantName={activeKhqrSession.merchantName}
           merchantAccount={activeKhqrSession.merchantAccount}

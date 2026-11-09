@@ -1,5 +1,76 @@
 export type CurrencyCode = 'USD' | 'KHR';
 
+export type BankCode = 'ABA' | 'ACLEDA' | 'WING' | 'BAKONG';
+
+export interface CambodiaBankOption {
+  code: BankCode;
+  shortName: string;
+  nameKh: string;
+  nameEn: string;
+  badgeBg: string;
+  badgeText: string;
+  headerGradient: string;
+  accentBorder: string;
+  androidPackage: string;
+  iosScheme: string;
+  playStoreUrl: string;
+}
+
+export const CAMBODIA_BANK_OPTIONS: CambodiaBankOption[] = [
+  {
+    code: 'ABA',
+    shortName: 'ABA',
+    nameKh: 'ធនាគារ ABA (ABA Mobile)',
+    nameEn: 'ABA PAY',
+    badgeBg: 'bg-[#003D6B]',
+    badgeText: 'text-white',
+    headerGradient: 'from-[#003D6B] via-[#005187] to-[#003D6B]',
+    accentBorder: 'border-[#E1232E]',
+    androidPackage: 'com.paygo24.ibank',
+    iosScheme: 'abamobilebank://',
+    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.paygo24.ibank',
+  },
+  {
+    code: 'ACLEDA',
+    shortName: 'ACLEDA',
+    nameKh: 'ធនាគារ អេស៊ីលីដា (ACLEDA Mobile)',
+    nameEn: 'ACLEDA Mobile',
+    badgeBg: 'bg-[#002B5C]',
+    badgeText: 'text-[#FACC15]',
+    headerGradient: 'from-[#00224B] via-[#00356B] to-[#001B3A]',
+    accentBorder: 'border-[#FACC15]',
+    androidPackage: 'com.domain.acledabankqr',
+    iosScheme: 'acledamobile://',
+    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.domain.acledabankqr',
+  },
+  {
+    code: 'WING',
+    shortName: 'WING',
+    nameKh: 'ធនាគារ វីង (Wing Bank)',
+    nameEn: 'Wing Bank',
+    badgeBg: 'bg-[#5B9BD5]',
+    badgeText: 'text-white',
+    headerGradient: 'from-[#004B8D] via-[#1B6CA8] to-[#3A8E2E]',
+    accentBorder: 'border-[#8DC63F]',
+    androidPackage: 'com.wingmoney.wingpay',
+    iosScheme: 'wingmoney://',
+    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.wingmoney.wingpay',
+  },
+  {
+    code: 'BAKONG',
+    shortName: 'KHQR',
+    nameKh: 'បាគង / គ្រប់ធនាគារ (Canadia, Sathapana...)',
+    nameEn: 'Bakong KHQR',
+    badgeBg: 'bg-[#E1232E]',
+    badgeText: 'text-white',
+    headerGradient: 'from-[#8B1118] via-[#B91C24] to-[#6E0D13]',
+    accentBorder: 'border-[#FACC15]',
+    androidPackage: 'kh.gov.nbc.bakong',
+    iosScheme: 'bakong://',
+    playStoreUrl: 'https://play.google.com/store/apps/details?id=kh.gov.nbc.bakong',
+  },
+];
+
 export type PaymentStatus = 'PENDING' | 'PAID' | 'FAILED' | 'EXPIRED' | 'CANCELLED';
 
 export type OrderStatus =
