@@ -1,0 +1,287 @@
+{
+  "entities": {
+    "Category": {
+      "title": "Category",
+      "description": "Product category for Vomyol Coffee menu items",
+      "type": "object",
+      "properties": {
+        "nameKh": { "type": "string", "maxLength": 100 },
+        "nameEn": { "type": "string", "maxLength": 100 },
+        "slug": { "type": "string", "maxLength": 60 },
+        "sortOrder": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 60 }
+      },
+      "required": ["nameKh", "nameEn", "slug", "sortOrder", "createdAt"]
+    },
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "Coffee and bakery product item stored in database",
+      "type": "object",
+      "properties": {
+        "nameKh": { "type": "string", "maxLength": 120 },
+        "nameEn": { "type": "string", "maxLength": 120 },
+        "categoryId": { "type": "string", "maxLength": 64 },
+        "priceUsd": { "type": "number" },
+        "discountPercent": { "type": "number" },
+        "descriptionKh": { "type": "string", "maxLength": 500 },
+        "imageUrl": { "type": "string", "maxLength": 800000 },
+        "isAvailable": { "type": "boolean" },
+        "soldCount": { "type": "number" },
+        "stockCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 60 },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 60 }
+      },
+      "required": [
+        "nameKh",
+        "nameEn",
+        "categoryId",
+        "priceUsd",
+        "discountPercent",
+        "descriptionKh",
+        "imageUrl",
+        "isAvailable",
+        "soldCount",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer coffee order with KHQR Bakong payment verification state",
+      "type": "object",
+      "properties": {
+        "orderNumber": { "type": "string", "maxLength": 40 },
+        "invoiceNumber": { "type": "string", "maxLength": 40 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "customerPhone": { "type": "string", "maxLength": 40 },
+        "tableOrType": { "type": "string", "maxLength": 60 },
+        "note": { "type": "string", "maxLength": 400 },
+        "itemsSummary": { "type": "string", "maxLength": 4000 },
+        "totalItemsCount": { "type": "number" },
+        "subtotalUsd": { "type": "number" },
+        "discountUsd": { "type": "number" },
+        "totalUsd": { "type": "number" },
+        "totalKhr": { "type": "number" },
+        "currency": { "type": "string", "enum": ["USD", "KHR"], "maxLength": 10 },
+        "paymentMethod": { "type": "string", "enum": ["ABA_KHQR", "KHQR_BAKONG", "CASH"], "maxLength": 30 },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["PENDING", "PAID", "FAILED", "EXPIRED", "CANCELLED"],
+          "maxLength": 30
+        },
+        "orderStatus": {
+          "type": "string",
+          "enum": ["NEW", "WAITING_PAYMENT", "PAID", "PREPARING", "COMPLETED", "CANCELLED"],
+          "maxLength": 30
+        },
+        "khqrMd5": { "type": "string", "maxLength": 64 },
+        "khqrString": { "type": "string", "maxLength": 600 },
+        "bakongTransactionId": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 60 },
+        "paidAt": { "type": "string", "maxLength": 60 }
+      },
+      "required": [
+        "orderNumber",
+        "invoiceNumber",
+        "customerName",
+        "customerPhone",
+        "tableOrType",
+        "note",
+        "itemsSummary",
+        "totalItemsCount",
+        "subtotalUsd",
+        "discountUsd",
+        "totalUsd",
+        "totalKhr",
+        "currency",
+        "paymentMethod",
+        "paymentStatus",
+        "orderStatus",
+        "khqrMd5",
+        "khqrString",
+        "bakongTransactionId",
+        "createdAt",
+        "paidAt"
+      ]
+    },
+    "Invoice": {
+      "title": "Invoice",
+      "description": "Official receipt and tax invoice generated upon payment verification",
+      "type": "object",
+      "properties": {
+        "invoiceNumber": { "type": "string", "maxLength": 40 },
+        "orderId": { "type": "string", "maxLength": 64 },
+        "orderNumber": { "type": "string", "maxLength": 40 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "itemsSummary": { "type": "string", "maxLength": 4000 },
+        "subtotalUsd": { "type": "number" },
+        "discountUsd": { "type": "number" },
+        "totalUsd": { "type": "number" },
+        "totalKhr": { "type": "number" },
+        "paymentMethod": { "type": "string", "maxLength": 40 },
+        "paymentStatus": { "type": "string", "maxLength": 40 },
+        "bakongTransactionId": { "type": "string", "maxLength": 100 },
+        "issuedAt": { "type": "string", "format": "date-time", "maxLength": 60 }
+      },
+      "required": [
+        "invoiceNumber",
+        "orderId",
+        "orderNumber",
+        "customerName",
+        "itemsSummary",
+        "subtotalUsd",
+        "discountUsd",
+        "totalUsd",
+        "totalKhr",
+        "paymentMethod",
+        "paymentStatus",
+        "bakongTransactionId",
+        "issuedAt"
+      ]
+    },
+    "BackupRecord": {
+      "title": "BackupRecord",
+      "description": "Automated and manual database backup snapshot for disaster recovery",
+      "type": "object",
+      "properties": {
+        "label": { "type": "string", "maxLength": 120 },
+        "categoriesCount": { "type": "number" },
+        "menuItemsCount": { "type": "number" },
+        "ordersCount": { "type": "number" },
+        "snapshotData": { "type": "string", "maxLength": 500000 },
+        "createdByEmail": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 60 }
+      },
+      "required": [
+        "label",
+        "categoriesCount",
+        "menuItemsCount",
+        "ordersCount",
+        "snapshotData",
+        "createdByEmail",
+        "createdAt"
+      ]
+    },
+    "PromoCode": {
+      "title": "PromoCode",
+      "description": "Promotional discount coupon code for Vomyol Coffee orders",
+      "type": "object",
+      "properties": {
+        "code": { "type": "string", "maxLength": 40 },
+        "discountPercent": { "type": "number" },
+        "discountFixedUsd": { "type": "number" },
+        "minOrderUsd": { "type": "number" },
+        "descriptionKh": { "type": "string", "maxLength": 200 },
+        "isActive": { "type": "boolean" },
+        "usageCount": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 60 }
+      },
+      "required": [
+        "code",
+        "discountPercent",
+        "discountFixedUsd",
+        "minOrderUsd",
+        "descriptionKh",
+        "isActive",
+        "usageCount",
+        "createdAt"
+      ]
+    },
+    "LoyaltyMember": {
+      "title": "LoyaltyMember",
+      "description": "Customer loyalty account tracked by phone number",
+      "type": "object",
+      "properties": {
+        "phone": { "type": "string", "maxLength": 40 },
+        "customerName": { "type": "string", "maxLength": 100 },
+        "points": { "type": "number" },
+        "totalSpentUsd": { "type": "number" },
+        "ordersCount": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time", "maxLength": 60 }
+      },
+      "required": [
+        "phone",
+        "customerName",
+        "points",
+        "totalSpentUsd",
+        "ordersCount",
+        "updatedAt"
+      ]
+    },
+    "ExpenseRecord": {
+      "title": "ExpenseRecord",
+      "description": "Daily shop expense for coffee beans, milk, cups, utilities, and supplies",
+      "type": "object",
+      "properties": {
+        "titleKh": { "type": "string", "maxLength": 140 },
+        "category": { "type": "string", "maxLength": 60 },
+        "amountUsd": { "type": "number" },
+        "amountKhr": { "type": "number" },
+        "expenseDate": { "type": "string", "maxLength": 30 },
+        "note": { "type": "string", "maxLength": 300 },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 60 }
+      },
+      "required": [
+        "titleKh",
+        "category",
+        "amountUsd",
+        "amountKhr",
+        "expenseDate",
+        "note",
+        "createdAt"
+      ]
+    },
+    "AdminProfile": {
+      "title": "AdminProfile",
+      "description": "Administrator account record with hashed password and verified role",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 120 },
+        "username": { "type": "string", "maxLength": 60 },
+        "passwordHash": { "type": "string", "maxLength": 200 },
+        "role": { "type": "string", "enum": ["admin"], "maxLength": 20 },
+        "createdAt": { "type": "string", "format": "date-time", "maxLength": 60 }
+      },
+      "required": ["uid", "email", "username", "passwordHash", "role", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/categories/{categoryId}": {
+      "schema": "Category",
+      "description": "Menu categories for Vomyol Coffee"
+    },
+    "/menuItems/{itemId}": {
+      "schema": "MenuItem",
+      "description": "Coffee and pastry products available in the store"
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Customer orders with KHQR Bakong verification state"
+    },
+    "/invoices/{invoiceId}": {
+      "schema": "Invoice",
+      "description": "Official invoices generated after verified payments"
+    },
+    "/backups/{backupId}": {
+      "schema": "BackupRecord",
+      "description": "Database snapshots for backup and restore"
+    },
+    "/promoCodes/{promoId}": {
+      "schema": "PromoCode",
+      "description": "Promotional discount codes"
+    },
+    "/loyaltyMembers/{memberId}": {
+      "schema": "LoyaltyMember",
+      "description": "Customer loyalty accounts by phone number"
+    },
+    "/expenses/{expenseId}": {
+      "schema": "ExpenseRecord",
+      "description": "Daily shop operating expenses"
+    },
+    "/admins/{adminUid}": {
+      "schema": "AdminProfile",
+      "description": "Authorized store administrators"
+    }
+  }
+}

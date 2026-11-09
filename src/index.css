@@ -1,0 +1,48 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Kantumruy Pro', system-ui, -apple-system, sans-serif;
+    --font-display: 'Kantumruy Pro', 'Cormorant Garamond', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #0B0E14;
+    color: #F3F4F6;
+    line-height: 1.65;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-khmer {
+    font-family: 'Kantumruy Pro', sans-serif;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+    font-family: var(--font-mono);
+  }
+}
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-invoice, #printable-invoice * {
+    visibility: visible;
+  }
+  #printable-invoice {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+}
