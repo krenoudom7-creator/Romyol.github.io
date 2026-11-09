@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  ShieldCheck,
   RefreshCw,
   CheckCircle2,
   XCircle,
@@ -49,7 +48,6 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
   autoTriggerAbaDeepLink = false,
   expiresAt,
   merchantName,
-  merchantAccount,
   abaAccountUsd = '009 338 762',
   abaAccountKhr = '009 338 764',
   onPaymentVerified,
@@ -62,16 +60,23 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
   const [simulating, setSimulating] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
   const [copiedCurrency, setCopiedCurrency] = useState<'USD' | 'KHR' | null>(null);
-  // Default to Dynamic QR so the exact amount is pre-filled inside the KHQR code
   const [qrMode, setQrMode] = useState<'static' | 'dynamic' | 'custom'>('dynamic');
   const [uploadedQrDataUrl, setUploadedQrDataUrl] = useState<string>('');
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState<string>('');
   const [abaLaunchAlertShown, setAbaLaunchAlertShown] = useState<boolean>(false);
 
+  const isAndroidDevice =
+    typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+
   const formattedOrderAmount =
     order.currency === 'KHR'
       ? formatKhr(order.totalKhr, true)
       : formatUsd(order.totalUsd);
+
+  const secondaryOrderAmount =
+    order.currency === 'KHR'
+      ? formatUsd(order.totalUsd)
+      : formatKhr(order.totalKhr, true);
 
   const targetAccountNumber =
     order.currency === 'KHR' ? abaAccountKhr : abaAccountUsd;
@@ -83,71 +88,89 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
       ? dynamicQrDataUrl
       : staticQrDataUrl || qrDataUrl;
 
-  const computedAbaDeepLink =
+  const rawKhqrPayload = order.khqrString || '';
+
+  // Standard ABA custom scheme (works on iOS & most Android browsers)
+  const computedAbaSchemeUri =
     abaDeepLink ||
-    `abamobilebank://ababank.com?type=payway&qrcode=${encodeURIComponent(
-      order.khqrString || ''
-    )}`;
+    `abamobilebank://ababank.com?type=payway&qrcode=${encodeURIComponent(rawKhqrPayload)}`;
 
-  // Launch ABA Mobile app with pre-set amount (triggers native OS "Open in ABA Mobile?" alert)
-  const handleOpenAbaMobileApp = useCallback(() => {
-    setQrMode('dynamic');
-    setAbaLaunchAlertShown(true);
+  // Official Android Chrome Intent URI for ABA Mobile (com.paygo24.ibank)
+  const computedAndroidIntentUri = `intent://ababank.com?type=payway&qrcode=${encodeURIComponent(
+    rawKhqrPayload
+  )}#Intent;scheme=abamobilebank;package=com.paygo24.ibank;S.browser_fallback_url=${encodeURIComponent(
+    'https://play.google.com/store/apps/details?id=com.paygo24.ibank'
+  )};end`;
 
-    // Copy target account number to clipboard as a helpful assistant
-    const cleanAcc = targetAccountNumber.replace(/\s+/g, '');
-    navigator.clipboard.writeText(cleanAcc).catch(() => {});
+  // Launch ABA Mobile app on Android or iOS with pre-set amount
+  const handleOpenAbaMobileApp = useCallback(
+    (preferAndroidIntent: boolean = isAndroidDevice) => {
+      setQrMode('dynamic');
+      setAbaLaunchAlertShown(true);
 
-    // Primary target URI: custom PayWay link if configured, otherwise Bakong shortLink or direct abamobilebank:// scheme
-    const targetUri =
-      abaPaywayLink && abaPaywayLink.startsWith('http')
-        ? abaPaywayLink
-        : bakongDeepLink && bakongDeepLink.startsWith('http')
-        ? bakongDeepLink
-        : computedAbaDeepLink;
+      // Copy target account number to clipboard automatically
+      const cleanAcc = targetAccountNumber.replace(/\s+/g, '');
+      navigator.clipboard.writeText(cleanAcc).catch(() => {});
 
-    // Trigger deep link navigation via anchor click (safe inside iframe & mobile Safari/Chrome)
-    const link = document.createElement('a');
-    link.href = targetUri;
-    link.rel = 'noopener noreferrer';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }, [abaPaywayLink, bakongDeepLink, computedAbaDeepLink, targetAccountNumber]);
+      let targetUri = computedAbaSchemeUri;
+      if (abaPaywayLink && abaPaywayLink.startsWith('http')) {
+        targetUri = abaPaywayLink;
+      } else if (preferAndroidIntent) {
+        targetUri = computedAndroidIntentUri;
+      } else if (bakongDeepLink && bakongDeepLink.startsWith('http')) {
+        targetUri = bakongDeepLink;
+      }
+
+      const link = document.createElement('a');
+      link.href = targetUri;
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    },
+    [
+      isAndroidDevice,
+      targetAccountNumber,
+      computedAbaSchemeUri,
+      abaPaywayLink,
+      computedAndroidIntentUri,
+      bakongDeepLink,
+    ]
+  );
 
   // Auto-trigger ABA Mobile Deep Link if customer clicked the "Open ABA Mobile" button in Cart
   useEffect(() => {
     if (autoTriggerAbaDeepLink && status === 'PENDING') {
       const timer = setTimeout(() => {
-        handleOpenAbaMobileApp();
-      }, 350);
+        handleOpenAbaMobileApp(isAndroidDevice);
+      }, 300);
       return () => clearTimeout(timer);
     }
-  }, [autoTriggerAbaDeepLink, status, handleOpenAbaMobileApp]);
+  }, [autoTriggerAbaDeepLink, status, isAndroidDevice, handleOpenAbaMobileApp]);
 
   // Download or Share Dynamic KHQR Image (with pre-set amount encoded in Tag 54)
-  const handleSaveOrSharePreFilledQr = async () => {
+  const handleSaveOrSharePreFilledQr = async (mode: 'share' | 'download') => {
     const qrSource = dynamicQrDataUrl || displayedQrUrl;
     if (!qrSource) return;
 
-    try {
-      const res = await fetch(qrSource);
-      const blob = await res.blob();
-      const fileName = `ABA-KHQR-${order.orderNumber}-${
-        order.currency === 'KHR' ? `${order.totalKhr}KHR` : `$${order.totalUsd.toFixed(2)}`
-      }.png`;
-      const file = new File([blob], fileName, { type: 'image/png' });
+    if (mode === 'share') {
+      try {
+        const res = await fetch(qrSource);
+        const blob = await res.blob();
+        const fileName = `ABA-KHQR-${order.orderNumber}.png`;
+        const file = new File([blob], fileName, { type: 'image/png' });
 
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
-          title: `ABA KHQR · ${merchantName} (${formattedOrderAmount})`,
-          text: `ទូទាត់ប្រាក់ចំនួន ${formattedOrderAmount} ទៅកាន់គណនី ABA ${merchantName} (${targetAccountNumber})`,
-          files: [file],
-        });
-        return;
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `ABA KHQR · ${merchantName} (${formattedOrderAmount})`,
+            text: `ទូទាត់ប្រាក់ចំនួន ${formattedOrderAmount} ទៅកាន់គណនី ABA ${merchantName} (${targetAccountNumber})`,
+            files: [file],
+          });
+          return;
+        }
+      } catch {
+        // Fallback to download if share cancelled or unsupported
       }
-    } catch {
-      // Fallback to direct download below
     }
 
     const a = document.createElement('a');
@@ -217,7 +240,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
   const handleCopyAccount = (accNum: string, curr: 'USD' | 'KHR') => {
     navigator.clipboard.writeText(accNum.replace(/\s+/g, '')).catch(() => {});
     setCopiedCurrency(curr);
-    setTimeout(() => setCopiedCurrency(null), 2500);
+    setTimeout(() => setCopiedCurrency(null), 2000);
   };
 
   // Allow owner to upload their real ABA Mobile QR screenshot directly here and decode EMVCo payload via jsQR
@@ -267,8 +290,8 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
 
         setUploadSuccessMsg(
           rawKhqr
-            ? 'បានអានកូដ EMVCo KHQR ពិតពីរូបភាព ABA Mobile របស់អ្នក និងរក្សាទុកជោគជ័យ!'
-            : 'បានដាក់រូបភាព ABA QR ផ្ទាល់ខ្លួនរបស់អ្នករួចរាល់!'
+            ? 'បានអានកូដ KHQR ពិតពីរូបភាព ABA Mobile ជោគជ័យ!'
+            : 'បានដាក់រូបភាព ABA QR ផ្ទាល់ខ្លួនរួចរាល់!'
         );
       };
       img.src = String(ev.target?.result || '');
@@ -297,7 +320,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
         await onPaymentVerified(data.bakongTransactionId, data.paidAt);
       } else {
         setErrorMsg(
-          'មិនទាន់ទទួលបានប្រតិបត្តិការទូទាត់ពីកម្មវិធី ABA Mobile / KHQR នៅឡើយទេ។ សូមស្កេន QR Code ឬចុចប៊ូតុងផ្ទៀងផ្ទាត់ការបង់ប្រាក់ខាងក្រោម។'
+          'មិនទាន់ឃើញប្រតិបត្តិការនៅឡើយទេ។ សូមចុចប៊ូតុងពណ៌មាសខាងក្រោម ប្រសិនបើអ្នកបានបង់ប្រាក់រួច។'
         );
       }
     } catch {
@@ -352,158 +375,66 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
   const minutes = Math.floor(secondsLeft / 60);
   const seconds = secondsLeft % 60;
 
-  const renderStatusText = () => {
-    switch (status) {
-      case 'PENDING':
-        return 'កំពុងរង់ចាំការស្កេន ឬទូទាត់តាម ABA Mobile';
-      case 'PAID':
-        return 'បានបង់ប្រាក់តាម ABA PAY រួចរាល់ (Verified)';
-      case 'FAILED':
-        return 'ការទូទាត់បរាជ័យ (Payment Failed)';
-      case 'EXPIRED':
-        return 'ផុតកំណត់ (QR Expired)';
-      case 'CANCELLED':
-        return 'បានបោះបង់ (Cancelled)';
-    }
-  };
-
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-[#131722] text-white w-full max-w-md rounded-2xl border border-[#2A3241] shadow-2xl overflow-hidden my-6">
-        {/* Official ABA PAY Navy Blue & Red Accent Header */}
-        <div className="bg-gradient-to-r from-[#003D6B] via-[#005187] to-[#003D6B] border-b-2 border-[#E1232E] text-white px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="px-2.5 py-1 rounded-lg bg-white text-[#003D6B] font-black text-sm tracking-tight flex items-center gap-0.5 shadow-sm">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-2 sm:p-4">
+      {/* Compact, Mobile-First Container that NEVER overflows viewport height */}
+      <div className="bg-[#131722] text-white w-full max-w-[390px] max-h-[94dvh] rounded-2xl border border-[#2A3241] shadow-2xl flex flex-col overflow-hidden">
+        {/* 1. COMPACT STICKY HEADER */}
+        <div className="shrink-0 bg-gradient-to-r from-[#003D6B] via-[#005187] to-[#003D6B] border-b-2 border-[#E1232E] text-white px-3.5 py-2.5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="px-2 py-0.5 rounded-md bg-white text-[#003D6B] font-black text-xs tracking-tight flex items-center gap-0.5 shadow-xs shrink-0">
               <span>ABA</span>
               <span className="text-[#E1232E]">&apos;</span>
-              <span className="text-xs font-extrabold ml-0.5">PAY</span>
+              <span className="text-[10px] font-extrabold ml-0.5">PAY</span>
             </div>
-            <div>
-              <div className="text-sm font-extrabold tracking-wide text-white">
-                ABA KHQR · {merchantName}
+            <div className="min-w-0">
+              <div className="text-xs font-extrabold tracking-wide text-white truncate">
+                {merchantName} · #{order.orderNumber.slice(-4)}
               </div>
-              <div className="text-[11px] text-sky-200">
-                ទូទាត់ប្រាក់រហ័សតាមកម្មវិធី ABA Mobile ឬស្កេន KHQR
+              <div className="text-[10px] text-sky-200 truncate">
+                ទូទាត់ប្រាក់រហ័សលើ Android / iOS ឬស្កេន KHQR
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-white/80 hover:text-white rounded-lg transition-colors"
+            className="p-1 text-white/80 hover:text-white rounded-lg transition-colors shrink-0"
             aria-label="បិទ"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* =================================================================
-              ONE-TAP "OPEN ABA MOBILE TO PAY PRE-SET AMOUNT" BUTTON
-             ================================================================= */}
+        {/* 2. SCROLLABLE COMPACT BODY */}
+        <div className="flex-1 overflow-y-auto overscroll-contain px-3.5 py-2.5 space-y-2.5">
+          {/* Compact Single-Row Mode Tabs */}
           {status === 'PENDING' && (
-            <div className="p-3.5 rounded-2xl bg-gradient-to-br from-[#002B4D] via-[#003D6B] to-[#0B1528] border-2 border-[#FACC15] shadow-[0_0_25px_rgba(250,204,21,0.2)] space-y-2.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-extrabold text-[#FACC15] flex items-center gap-1.5">
-                  <Smartphone className="w-4 h-4" />
-                  <span>ទូទាត់ផ្ទាល់លើទូរស័ព្ទ (One-Tap ABA Pay)</span>
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-[#E1232E] text-white text-[10px] font-black tracking-wider uppercase">
-                  ចំនួនទឹកប្រាក់កំណត់ស្រេច
-                </span>
-              </div>
-
-              <a
-                href={computedAbaDeepLink}
-                onClick={(e) => {
-                  e.preventDefault();
-                  handleOpenAbaMobileApp();
-                }}
-                className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-[#FACC15] via-[#FDE047] to-[#F59E0B] text-[#0B0E14] font-black text-xs sm:text-sm flex items-center justify-between gap-2 shadow-lg hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer"
-              >
-                <div className="flex items-center gap-2.5">
-                  <span className="px-2 py-1 rounded-lg bg-[#003D6B] text-white text-xs font-black tracking-tight shrink-0">
-                    ABA<span className="text-[#E1232E]">&apos;</span>
-                  </span>
-                  <div className="text-left">
-                    <div className="leading-tight">
-                      ចុចបើក ABA Mobile ទូទាត់ឥឡូវនេះ
-                    </div>
-                    <div className="text-[10px] font-bold text-[#003D6B] leading-tight mt-0.5">
-                      គណនី {merchantName} ({targetAccountNumber})
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 shrink-0 bg-[#0B0E14] text-[#FACC15] px-3 py-1.5 rounded-lg font-black text-sm tabular-nums">
-                  <span>{formattedOrderAmount}</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </div>
-              </a>
-
-              {/* Quick Share / Save Pre-Filled Dynamic QR for 1-Tap "Open QR" inside ABA Mobile */}
-              <div className="grid grid-cols-2 gap-2 pt-0.5">
-                <button
-                  type="button"
-                  onClick={handleSaveOrSharePreFilledQr}
-                  className="py-2 px-3 rounded-xl bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-sky-400/40 text-[11px] font-bold text-sky-200 flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Share2 className="w-3.5 h-3.5 text-[#FACC15]" />
-                  <span>បញ្ជូន QR ({formattedOrderAmount}) ទៅ ABA</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveOrSharePreFilledQr}
-                  className="py-2 px-3 rounded-xl bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-sky-400/40 text-[11px] font-bold text-sky-200 flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Download className="w-3.5 h-3.5 text-[#FACC15]" />
-                  <span>រក្សាទុករូប QR ({formattedOrderAmount})</span>
-                </button>
-              </div>
-
-              {abaLaunchAlertShown && (
-                <div className="p-2.5 rounded-xl bg-emerald-950/90 border border-emerald-400/60 text-[11px] text-emerald-200 space-y-1 animate-fadeIn">
-                  <div className="font-extrabold text-[#FACC15] flex items-center gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span>
-                      បានបើក Alert ចូលកម្មវិធី ABA Mobile និងចម្លងលេខគណនី ({targetAccountNumber}) រួចរាល់!
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-emerald-100/90 leading-relaxed">
-                    • ប្រសិនបើទូរស័ព្ទលោតផ្ទាំងសួរ <strong>&ldquo;Open in ABA Mobile?&rdquo;</strong> សូមចុច <strong>Open</strong> ដើម្បីទូទាត់ចំនួន <strong>{formattedOrderAmount}</strong> តែម្ដង។
-                    <br />• ឬចុច <strong>«រក្សាទុករូប QR ({formattedOrderAmount})»</strong> រួចចុចប៊ូតុង <strong>«បើក QR»</strong> ក្នុង ABA Scan នោះទឹកប្រាក់ <strong>{formattedOrderAmount}</strong> នឹងលោតចូលដោយស្វ័យប្រវត្តិ!
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* QR Mode Selector Pills (Dynamic Pre-Set Amount vs Static vs Upload Real ABA Mobile QR) */}
-          {status === 'PENDING' && (
-            <div className="flex flex-wrap items-center justify-center gap-1.5 bg-[#0B0E14] p-1.5 rounded-xl border border-[#222938]">
+            <div className="grid grid-cols-3 gap-1 bg-[#0B0E14] p-1 rounded-xl border border-[#222938]">
               <button
                 type="button"
                 onClick={() => setQrMode('dynamic')}
-                className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                className={`py-1.5 px-1.5 text-[10px] font-extrabold rounded-lg transition-all truncate ${
                   qrMode === 'dynamic'
                     ? 'bg-[#FACC15] text-[#0B0E14]'
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                QR កំណត់ប្រាក់ស្រេច ({formattedOrderAmount})
+                QR ភ្ជាប់ប្រាក់
               </button>
               <button
                 type="button"
                 onClick={() => setQrMode('static')}
-                className={`px-2.5 py-1.5 text-[11px] font-bold rounded-lg transition-all ${
+                className={`py-1.5 px-1.5 text-[10px] font-extrabold rounded-lg transition-all truncate ${
                   qrMode === 'static'
                     ? 'bg-[#FACC15] text-[#0B0E14]'
                     : 'text-slate-300 hover:text-white'
                 }`}
               >
-                QR គណនីផ្ទាល់ (Static)
+                QR គណនីផ្ទាល់
               </button>
-              <label className="cursor-pointer px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-[#003D6B] text-white hover:bg-[#004F8B] inline-flex items-center gap-1">
-                <Upload className="w-3 h-3 text-[#FACC15]" />
-                <span>ដាក់រូប QR ពី ABA</span>
+              <label className="cursor-pointer py-1.5 px-1.5 text-[10px] font-extrabold rounded-lg bg-[#003D6B] text-white hover:bg-[#004F8B] flex items-center justify-center gap-1 truncate">
+                <Upload className="w-3 h-3 text-[#FACC15] shrink-0" />
+                <span className="truncate">ដាក់រូប QR</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -515,93 +446,143 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
           )}
 
           {uploadSuccessMsg && (
-            <div className="p-2.5 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-[11px] text-emerald-300 font-semibold text-center">
+            <div className="p-2 rounded-lg bg-emerald-950/70 border border-emerald-500/50 text-[10px] text-emerald-300 font-semibold text-center">
               {uploadSuccessMsg}
             </div>
           )}
 
-          {/* Authentic ABA KHQR Standee Card */}
+          {/* Compact Authentic ABA KHQR Card */}
           {status === 'PENDING' && (
-            <div className="max-w-[290px] mx-auto rounded-2xl overflow-hidden shadow-2xl bg-white text-[#111827] border border-slate-200">
-              {/* Top Red KHQR Header Bar */}
-              <div className="bg-[#E1232E] text-white py-2 px-4 text-center font-black tracking-[0.2em] text-sm">
-                KHQR
+            <div className="max-w-[235px] mx-auto rounded-xl overflow-hidden shadow-lg bg-white text-[#111827] border border-slate-200">
+              <div className="bg-[#E1232E] text-white py-1 px-3 flex items-center justify-between">
+                <span className="font-black tracking-[0.18em] text-[11px]">KHQR</span>
+                <span className="text-[10px] font-bold tabular-nums flex items-center gap-1 bg-black/20 px-1.5 py-0.5 rounded">
+                  <Clock className="w-2.5 h-2.5" />
+                  {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+                </span>
               </div>
 
-              {/* Merchant Name & Exact Order Amount */}
-              <div className="px-5 pt-3.5 pb-2.5 text-left border-b border-dashed border-slate-300">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                  {merchantName}
+              <div className="px-3.5 py-2 flex items-baseline justify-between border-b border-dashed border-slate-300">
+                <div>
+                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-none">
+                    {merchantName}
+                  </div>
+                  <div className="text-lg font-black text-[#003D6B] tabular-nums leading-tight mt-0.5">
+                    {formattedOrderAmount}
+                  </div>
                 </div>
-                <div className="mt-0.5 flex items-baseline justify-between">
-                  <div className="text-2xl font-black text-[#003D6B] tabular-nums">
-                    {order.currency === 'KHR'
-                      ? formatKhr(order.totalKhr, true)
-                      : formatUsd(order.totalUsd)}
-                  </div>
-                  <div className="text-xs font-semibold text-slate-500 tabular-nums">
-                    {order.currency === 'KHR'
-                      ? formatUsd(order.totalUsd)
-                      : formatKhr(order.totalKhr, true)}
-                  </div>
+                <div className="text-[11px] font-bold text-slate-500 tabular-nums">
+                  {secondaryOrderAmount}
                 </div>
               </div>
 
-              {/* QR Code Image */}
-              <div className="p-3.5 flex flex-col items-center bg-white">
+              <div className="p-2.5 flex flex-col items-center bg-white">
                 <img
                   src={displayedQrUrl}
                   alt={`ABA KHQR Code for Order ${order.orderNumber}`}
-                  className="w-48 h-48 object-contain"
+                  className="w-36 h-36 sm:w-40 sm:h-40 object-contain"
                 />
-                <div className="mt-2 flex items-center justify-between w-full text-[11px] text-slate-500 font-semibold px-1">
-                  <span className="truncate max-w-[175px]">ABA · {merchantAccount}</span>
-                  <span className="tabular-nums text-[#E1232E] font-bold flex items-center gap-1 shrink-0">
-                    <Clock className="w-3 h-3" />
-                    {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-                  </span>
+                <div className="mt-1 text-[10px] text-slate-500 font-bold tabular-nums truncate max-w-full">
+                  ABA · {targetAccountNumber.replace(/\s+/g, '')} ({merchantName})
                 </div>
               </div>
             </div>
           )}
 
-          {/* ABA Direct Account Numbers Box (Both USD $ and KHR ៛ for UDOM KREN) */}
-          <div className="border border-[#2A3241] rounded-xl p-3.5 bg-[#0B0E14] space-y-2.5">
-            <div className="flex items-center justify-between text-xs border-b border-[#1E2532] pb-2">
-              <span className="text-slate-400">ឈ្មោះគណនី ABA (Account Name):</span>
+          {/* ANDROID & iOS ONE-TAP ABA MOBILE LAUNCH BAR */}
+          {status === 'PENDING' && (
+            <div className="p-2.5 rounded-xl bg-gradient-to-br from-[#002B4D] via-[#003D6B] to-[#0B1528] border border-[#FACC15]/80 space-y-2">
+              <div className="grid grid-cols-2 gap-1.5">
+                {/* Android Intent Button */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenAbaMobileApp(true)}
+                  className="py-2 px-2.5 rounded-lg bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-[#0B0E14] font-black text-[11px] flex items-center justify-center gap-1.5 shadow-sm hover:brightness-105 active:scale-[0.99] transition-all"
+                >
+                  <Smartphone className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">បើក ABA (Android)</span>
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                </button>
+
+                {/* iOS / Direct Scheme Button */}
+                <button
+                  type="button"
+                  onClick={() => handleOpenAbaMobileApp(false)}
+                  className="py-2 px-2.5 rounded-lg bg-white text-[#003D6B] font-black text-[11px] flex items-center justify-center gap-1.5 shadow-sm hover:bg-slate-100 active:scale-[0.99] transition-all"
+                >
+                  <Smartphone className="w-3.5 h-3.5 text-[#E1232E] shrink-0" />
+                  <span className="truncate">បើក ABA (iPhone)</span>
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                </button>
+              </div>
+
+              {/* Save / Share QR with Pre-set Amount */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleSaveOrSharePreFilledQr('share')}
+                  className="py-1.5 px-2 rounded-lg bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-sky-400/35 text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
+                >
+                  <Share2 className="w-3 h-3 text-[#FACC15] shrink-0" />
+                  <span className="truncate">Share QR ({formattedOrderAmount})</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSaveOrSharePreFilledQr('download')}
+                  className="py-1.5 px-2 rounded-lg bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-sky-400/35 text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
+                >
+                  <Download className="w-3 h-3 text-[#FACC15] shrink-0" />
+                  <span className="truncate">ទាញយក QR ({formattedOrderAmount})</span>
+                </button>
+              </div>
+
+              {abaLaunchAlertShown && (
+                <div className="px-2.5 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-400/50 text-[10px] text-emerald-200 flex items-center gap-1.5">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span className="leading-snug">
+                    បានបើក ABA Mobile និងចម្លងលេខគណនី <strong>{targetAccountNumber}</strong> រួចរាល់!
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Compact Single-Line Account Numbers Box (Never wraps numbers onto 2 lines) */}
+          <div className="border border-[#2A3241] rounded-xl p-2.5 bg-[#0B0E14] space-y-1.5">
+            <div className="flex items-center justify-between text-[11px] border-b border-[#1E2532] pb-1.5">
+              <span className="text-slate-400">ឈ្មោះគណនី ABA:</span>
               <span className="font-extrabold text-white tracking-wide uppercase">
                 {merchantName}
               </span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-1.5">
               {/* USD Account */}
               <div
-                className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 ${
+                className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between gap-1.5 ${
                   order.currency === 'USD'
                     ? 'bg-[#131C2E] border-[#FACC15]/60'
                     : 'bg-[#121620] border-[#222938]'
                 }`}
               >
-                <div>
-                  <div className="text-[10px] font-bold text-slate-400">គណនីដុល្លារ ($)</div>
-                  <div className="text-sm font-extrabold text-[#FACC15] tabular-nums tracking-wide">
+                <div className="min-w-0">
+                  <div className="text-[9px] font-bold text-slate-400 leading-tight">
+                    គណនីដុល្លារ ($)
+                  </div>
+                  <div className="text-xs font-extrabold text-[#FACC15] tabular-nums whitespace-nowrap">
                     {abaAccountUsd}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleCopyAccount(abaAccountUsd, 'USD')}
-                  className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-[#0B0E14] text-white border border-[#2D384D] hover:border-[#FACC15] transition-colors inline-flex items-center gap-1 shrink-0"
+                  className="px-2 py-1 text-[10px] font-bold rounded-md bg-[#0B0E14] text-white border border-[#2D384D] hover:border-[#FACC15] transition-colors inline-flex items-center gap-1 shrink-0"
                 >
                   {copiedCurrency === 'USD' ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span className="text-emerald-400">ចម្លងរួច</span>
-                    </>
+                    <Check className="w-3 h-3 text-emerald-400" />
                   ) : (
                     <>
-                      <Copy className="w-3 h-3 text-[#FACC15]" />
+                      <Copy className="w-2.5 h-2.5 text-[#FACC15]" />
                       <span>Copy</span>
                     </>
                   )}
@@ -610,31 +591,30 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
 
               {/* KHR Account */}
               <div
-                className={`p-2.5 rounded-lg border flex items-center justify-between gap-2 ${
+                className={`px-2.5 py-1.5 rounded-lg border flex items-center justify-between gap-1.5 ${
                   order.currency === 'KHR'
                     ? 'bg-[#131C2E] border-[#FACC15]/60'
                     : 'bg-[#121620] border-[#222938]'
                 }`}
               >
-                <div>
-                  <div className="text-[10px] font-bold text-slate-400">គណនីប្រាក់រៀល (៛)</div>
-                  <div className="text-sm font-extrabold text-[#FACC15] tabular-nums tracking-wide">
+                <div className="min-w-0">
+                  <div className="text-[9px] font-bold text-slate-400 leading-tight">
+                    គណនីប្រាក់រៀល (៛)
+                  </div>
+                  <div className="text-xs font-extrabold text-[#FACC15] tabular-nums whitespace-nowrap">
                     {abaAccountKhr}
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => handleCopyAccount(abaAccountKhr, 'KHR')}
-                  className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-[#0B0E14] text-white border border-[#2D384D] hover:border-[#FACC15] transition-colors inline-flex items-center gap-1 shrink-0"
+                  className="px-2 py-1 text-[10px] font-bold rounded-md bg-[#0B0E14] text-white border border-[#2D384D] hover:border-[#FACC15] transition-colors inline-flex items-center gap-1 shrink-0"
                 >
                   {copiedCurrency === 'KHR' ? (
-                    <>
-                      <Check className="w-3 h-3 text-emerald-400" />
-                      <span className="text-emerald-400">ចម្លងរួច</span>
-                    </>
+                    <Check className="w-3 h-3 text-emerald-400" />
                   ) : (
                     <>
-                      <Copy className="w-3 h-3 text-[#FACC15]" />
+                      <Copy className="w-2.5 h-2.5 text-[#FACC15]" />
                       <span>Copy</span>
                     </>
                   )}
@@ -643,74 +623,65 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             </div>
           </div>
 
-          {/* Status Feedback Banner */}
-          <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#2A3241] flex items-center justify-between text-xs">
-            <div className="flex items-center gap-2 font-medium text-white">
-              {status === 'PENDING' && (
-                <RefreshCw className={`w-4 h-4 text-[#FACC15] ${checking ? 'animate-spin' : ''}`} />
-              )}
-              {status === 'PAID' && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
-              {(status === 'FAILED' || status === 'EXPIRED' || status === 'CANCELLED') && (
-                <XCircle className="w-4 h-4 text-red-400" />
-              )}
-              <span>{renderStatusText()}</span>
-            </div>
-          </div>
-
           {errorMsg && (
-            <div className="p-3 rounded-lg bg-red-950/60 border border-red-700/60 text-xs text-red-300 flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+            <div className="p-2 rounded-lg bg-red-950/60 border border-red-700/60 text-[11px] text-red-300 flex items-start gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
               <span>{errorMsg}</span>
             </div>
           )}
 
-          {/* Helpful Explanation Note */}
-          <div className="p-3 rounded-lg bg-[#0B0E14] border border-[#1E2532] text-[11px] text-slate-400 space-y-1">
-            <div className="flex items-center gap-1.5 font-semibold text-sky-400">
-              <ShieldCheck className="w-4 h-4 text-sky-400" />
-              <span>របៀបទូទាត់ប្រាក់ដោយមិនបាច់វាយលេខទឹកប្រាក់៖</span>
+          {status !== 'PENDING' && (
+            <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#2A3241] flex items-center justify-center gap-2 text-xs font-bold">
+              {status === 'PAID' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span className="text-emerald-400">បានបង់ប្រាក់តាម ABA PAY រួចរាល់!</span>
+                </>
+              ) : (
+                <>
+                  <XCircle className="w-4 h-4 text-red-400" />
+                  <span className="text-red-400">ប្រតិបត្តិការត្រូវបានបោះបង់ ឬផុតកំណត់</span>
+                </>
+              )}
             </div>
-            <p>
-              1. ចុចប៊ូតុងពណ៌មាស <strong className="text-[#FACC15]">«ចុចបើក ABA Mobile ទូទាត់ឥឡូវនេះ ({formattedOrderAmount})»</strong> ខាងលើ ដើម្បីឱ្យទូរស័ព្ទលោត Alert បើកចូលកម្មវិធី ABA Mobile ភ្លាមៗ។
-              <br />
-              2. ឬស្កេនកូដ <strong>QR កំណត់ប្រាក់ស្រេច ({formattedOrderAmount})</strong> នោះចំនួនទឹកប្រាក់នឹងលោតចូលក្នុង ABA Mobile ដោយស្វ័យប្រវត្តិ!
-            </p>
-          </div>
+          )}
+        </div>
 
-          {/* Action Controls */}
-          {status === 'PENDING' && (
-            <div className="space-y-2.5 pt-1">
+        {/* 3. STICKY BOTTOM ACTION FOOTER (Always reachable on mobile screens) */}
+        {status === 'PENDING' && (
+          <div className="shrink-0 px-3.5 py-2.5 bg-[#0B0E14] border-t border-[#262E3D] space-y-1.5">
+            <button
+              onClick={handleSimulateBakongAppScan}
+              disabled={simulating}
+              className="w-full py-2.5 px-3 text-xs font-extrabold text-[#0B0E14] bg-gradient-to-r from-[#FACC15] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-1.5 shadow-md"
+            >
+              <CheckCircle2 className="w-4 h-4 text-[#0B0E14] shrink-0" />
+              <span className="truncate">
+                {simulating
+                  ? 'កំពុងផ្ទៀងផ្ទាត់ប្រតិបត្តិការ ABA...'
+                  : `បញ្ជាក់ថាបានបង់ប្រាក់ (${formattedOrderAmount}) · ចេញវិក្កយបត្រ`}
+              </span>
+            </button>
+
+            <div className="grid grid-cols-2 gap-1.5">
               <button
                 onClick={handleManualCheck}
                 disabled={checking}
-                className="w-full py-2.5 px-4 text-xs font-bold text-white bg-gradient-to-r from-[#004269] to-[#005B8E] border border-sky-500/40 rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2"
+                className="py-1.5 px-2.5 text-[11px] font-bold text-sky-200 bg-[#131C2E] border border-sky-500/30 rounded-lg hover:brightness-110 transition-all flex items-center justify-center gap-1"
               >
-                <RefreshCw className={`w-4 h-4 ${checking ? 'animate-spin' : ''}`} />
-                <span>ពិនិត្យស្ថានភាពបង់ប្រាក់ ABA ឥឡូវនេះ</span>
-              </button>
-
-              <button
-                onClick={handleSimulateBakongAppScan}
-                disabled={simulating}
-                className="w-full py-2.5 px-4 text-xs font-extrabold text-[#0B0E14] bg-gradient-to-r from-[#FACC15] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-2 shadow-md"
-              >
-                <Smartphone className="w-4 h-4 text-[#0B0E14]" />
-                <span>
-                  {simulating
-                    ? 'កំពុងផ្ទៀងផ្ទាត់ប្រតិបត្តិការ ABA...'
-                    : 'បញ្ជាក់ថាបានបង់ប្រាក់តាម ABA រួចរាល់ (ចេញវិក្កយបត្រ)'}
-                </span>
+                <RefreshCw className={`w-3 h-3 ${checking ? 'animate-spin' : ''}`} />
+                <span className="truncate">ពិនិត្យការបង់ប្រាក់</span>
               </button>
 
               <button
                 onClick={handleCancel}
-                className="w-full py-2 px-4 text-xs font-medium text-red-400 hover:bg-red-950/40 rounded-xl transition-colors"
+                className="py-1.5 px-2.5 text-[11px] font-bold text-red-400 bg-red-950/25 border border-red-500/25 hover:bg-red-950/40 rounded-lg transition-colors truncate"
               >
-                បោះបង់ការទូទាត់ (Cancel Payment)
+                បោះបង់ (Cancel)
               </button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
