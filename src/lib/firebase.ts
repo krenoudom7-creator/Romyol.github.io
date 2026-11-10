@@ -131,8 +131,8 @@ export const INITIAL_CATEGORIES: Category[] = [
 export const INITIAL_MENU_ITEMS: MenuItem[] = [
   {
     id: 'item_default_vomyol_iced_latte',
-    nameKh: 'កាហ្វេទឹកដោះគោទឹកកក វំយោលពិសេស',
-    nameEn: 'Vomyol Signature Iced Condensed Latte',
+    nameKh: 'កាហ្វេទឹកដោះគោទឹកកក រំដួលពិសេស',
+    nameEn: 'Romdoul Signature Iced Condensed Latte',
     categoryId: 'cat_default_signature',
     priceUsd: 2.75,
     discountPercent: 0,
@@ -147,7 +147,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
   },
   {
     id: 'item_default_palm_sugar_macchiato',
-    nameKh: 'កាហ្វេស្ករត្នោតទឹកកក វំយោល',
+    nameKh: 'កាហ្វេស្ករត្នោតទឹកកក រំដួល',
     nameEn: 'Kampong Speu Palm Sugar Macchiato',
     categoryId: 'cat_default_signature',
     priceUsd: 3.0,
@@ -229,8 +229,8 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
 
 export const INITIAL_PROMO_CODES: PromoCode[] = [
   {
-    id: 'promo_vomyol10',
-    code: 'VOMYOL10',
+    id: 'promo_romdoul10',
+    code: 'ROMDOUL10',
     discountPercent: 10,
     discountFixedUsd: 0,
     minOrderUsd: 2.0,

@@ -131,7 +131,7 @@ function buildOfficialAbaKhqr(params: {
     accountInformation: cleanAccountNumber,
     acquiringBank: 'ABA Bank',
     billNumber: params.orderNumber.slice(0, 20),
-    storeLabel: 'Vomyol Coffee',
+    storeLabel: 'Romdoul Caffee',
     expirationTimestamp,
   });
   const dynResult = khqrSdk.generateIndividual(dynamicInfo);
@@ -443,7 +443,7 @@ async function startServer() {
             : process.env.APP_URL || 'https://vomyolcoffee.com';
         const sourceInfo = new SourceInfo(
           `${appOrigin}/favicon.ico`,
-          'Vomyol Coffee',
+          'Romdoul Caffee',
           appOrigin
         );
         const deepLinkRes: any = await Promise.race([
@@ -750,7 +750,7 @@ async function startServer() {
       } = req.body || {};
 
       const message =
-        `☕ *ការកម្មង់ថ្មី - វំយោលកាហ្វេ (VOMYOL COFFEE)*\n` +
+        `☕ *ការកម្មង់ថ្មី - រំដួលកាហ្វេ (ROMDOUL CAFFEE)*\n` +
         `━━━━━━━━━━━━━━━━━━━━\n` +
         `🧾 លេខកម្មង់: \`${orderNumber}\`\n` +
         `📄 វិក្កយបត្រ: \`${invoiceNumber}\`\n` +

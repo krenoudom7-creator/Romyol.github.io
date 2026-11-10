@@ -1,6 +1,9 @@
 import React from 'react';
-import { Printer, Download, X, CheckCircle2, Coffee } from 'lucide-react';
+import { Printer, Download, X, CheckCircle2 } from 'lucide-react';
 import { Invoice, OrderLineItem, formatUsd, formatKhr } from '../types';
+import { ProductImage } from './ProductImage';
+
+const ROMDOUL_LOGO_URL = '/src/assets/images/romdoul_caffee_logo_1794272922476.jpg';
 
 interface InvoiceModalProps {
   invoice: Invoice | null;
@@ -34,7 +37,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
 <html lang="km">
 <head>
 <meta charset="UTF-8" />
-<title>វិក្កយបត្រ ${invoice.invoiceNumber} - វំយោលកាហ្វេ</title>
+<title>វិក្កយបត្រ ${invoice.invoiceNumber} - រំដួលកាហ្វេ (Romdoul Caffee)</title>
 <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet" />
 <style>
   body { font-family: 'Kantumruy Pro', sans-serif; max-width: 480px; margin: 24px auto; padding: 24px; border: 1px solid #ddd; color: #111827; }
@@ -51,7 +54,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
 </head>
 <body>
   <div class="header">
-    <p class="title">វំយោលកាហ្វេ (VOMYOL COFFEE)</p>
+    <p class="title">រំដួលកាហ្វេ (ROMDOUL CAFFEE)</p>
     <p class="meta">វិក្កយបត្រផ្លូវការ / Official Receipt</p>
     <p class="meta">លេខវិក្កយបត្រ: <strong>${invoice.invoiceNumber}</strong></p>
     <p class="meta">លេខការកម្មង់: ${invoice.orderNumber} · កាលបរិច្ឆេទ: ${formattedDate}</p>
@@ -111,7 +114,7 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${invoice.invoiceNumber}-Vomyol-Coffee.html`;
+    a.download = `${invoice.invoiceNumber}-Romdoul-Caffee.html`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -120,9 +123,9 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-[#131722] text-white w-full max-w-lg rounded-2xl border border-[#2A3241] shadow-2xl overflow-hidden my-8">
+      <div className="rgb-modal text-white w-full max-w-lg rounded-2xl overflow-hidden my-8">
         {/* Top Action Bar */}
-        <div className="flex items-center justify-between px-6 py-4 bg-[#0B0E14] border-b border-[#2A3241]">
+        <div className="flex items-center justify-between px-6 py-4 bg-[#0B0E14]">
           <div className="flex items-center gap-2 text-sm font-bold text-[#FACC15]">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
             <span>វិក្កយបត្រផ្លូវការ · {invoice.invoiceNumber}</span>
@@ -135,15 +138,20 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
             <X className="w-5 h-5" />
           </button>
         </div>
+        <div className="rgb-line" />
 
         {/* Printable Invoice Area (Clean white paper receipt for print compatibility) */}
         <div id="printable-invoice" className="p-6 sm:p-8 bg-white text-[#111827]">
           <div className="text-center border-b border-dashed border-slate-300 pb-5 mb-5">
-            <div className="inline-flex items-center justify-center w-11 h-11 rounded-full bg-[#0B0E14] text-[#FACC15] mb-2">
-              <Coffee className="w-5 h-5" />
+            <div className="inline-flex items-center justify-center p-1 rounded-full rgb-logo-ring mb-2">
+              <ProductImage
+                src={ROMDOUL_LOGO_URL}
+                alt="Romdoul Caffee Logo"
+                className="w-12 h-12 rounded-full object-cover"
+              />
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-[#111827]">
-              វំយោលកាហ្វេ · VOMYOL COFFEE
+              រំដួលកាហ្វេ · ROMDOUL CAFFEE
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               កាហ្វេឆុងថ្មីៗតាមស្តង់ដារវិជ្ជាជីវៈ · រាជធានីភ្នំពេញ
@@ -261,15 +269,16 @@ export const InvoiceModal: React.FC<InvoiceModalProps> = ({ invoice, onClose }) 
           </div>
 
           <div className="mt-6 pt-4 border-t border-dashed border-slate-300 text-center text-xs text-slate-500">
-            សូមអរគុណសម្រាប់ការគាំទ្រ «វំយោលកាហ្វេ»! សូមអញ្ជើញមកពិសាម្ដងទៀត។
+            សូមអរគុណសម្រាប់ការគាំទ្រ «រំដួលកាហ្វេ (Romdoul Caffee)»! សូមអញ្ជើញមកពិសាម្ដងទៀត។
           </div>
         </div>
 
+        <div className="rgb-line" />
         {/* Footer Buttons */}
-        <div className="flex flex-wrap items-center justify-end gap-3 px-6 py-4 bg-[#0B0E14] border-t border-[#2A3241]">
+        <div className="flex flex-wrap items-center justify-end gap-3 px-6 py-4 bg-[#0B0E14]">
           <button
             onClick={handleDownloadHtml}
-            className="inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white bg-[#1A202C] border border-[#2D3748] rounded-xl hover:bg-[#252D3D] transition-colors whitespace-nowrap shrink-0"
+            className="rgb-pill inline-flex items-center gap-2 px-4 py-2 text-xs font-semibold text-white rounded-xl hover:brightness-110 transition-all whitespace-nowrap shrink-0"
           >
             <Download className="w-4 h-4 text-[#FACC15]" />
             <span>ទាញយកជា PDF / ឯកសារ</span>

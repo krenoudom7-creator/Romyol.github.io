@@ -71,7 +71,7 @@ export async function generateClientSideAbaKhqrFallback(params: {
 
   // Tag 62: Additional Data Field Template (Bill Number & Store Label)
   const tag62Value =
-    tlv('01', params.orderNumber.slice(0, 20)) + tlv('03', 'Vomyol Coffee');
+    tlv('01', params.orderNumber.slice(0, 20)) + tlv('03', 'Romdoul Caffee');
 
   // Tag 99: Creation & Expiration Timestamp (Required for Dynamic KHQR 010212)
   const tag99Value = tlv('00', String(nowMs)) + tlv('01', String(expMs));

@@ -93,7 +93,7 @@ export const DrinkCustomizationModal: React.FC<DrinkCustomizationModalProps> = (
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-4 overflow-y-auto">
-      <div className="bg-[#131722] text-white w-full max-w-lg rounded-2xl border border-[#2A3241] shadow-2xl overflow-hidden my-6">
+      <div className="rgb-modal text-white w-full max-w-lg rounded-2xl overflow-hidden my-6">
         {/* Header with Product Image & Title */}
         <div className="relative h-44 bg-[#0B0E14]">
           <ProductImage
@@ -130,6 +130,7 @@ export const DrinkCustomizationModal: React.FC<DrinkCustomizationModalProps> = (
             </div>
           </div>
         </div>
+        <div className="rgb-line" />
 
         {/* Customization Form */}
         <form onSubmit={handleConfirm} className="p-5 space-y-5 max-h-[68vh] overflow-y-auto">
@@ -148,10 +149,10 @@ export const DrinkCustomizationModal: React.FC<DrinkCustomizationModalProps> = (
                         key={sz.code}
                         type="button"
                         onClick={() => setCupSize(sz.code)}
-                        className={`py-2.5 px-3 rounded-xl border text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
+                        className={`py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
                           active
-                            ? 'bg-[#FACC15]/15 border-[#FACC15] text-[#FACC15]'
-                            : 'bg-[#0B0E14] border-[#262E3D] text-slate-300 hover:border-slate-500'
+                            ? 'rgb-card-dark text-[#FACC15]'
+                            : 'bg-[#0B0E14] border border-[#262E3D] text-slate-300 hover:border-slate-500'
                         }`}
                       >
                         <span>{sz.labelKh}</span>

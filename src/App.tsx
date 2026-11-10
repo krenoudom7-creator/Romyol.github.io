@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   ShoppingBag,
   Search,
@@ -24,6 +24,7 @@ import {
   Award,
   Sparkles,
   Smartphone,
+  Printer,
 } from 'lucide-react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import {
@@ -67,19 +68,21 @@ import { AdminDashboard } from './components/AdminDashboard';
 import { playOrderNotificationSound } from './lib/soundAndExport';
 import { generateClientSideAbaKhqrFallback } from './lib/clientKhqrFallback';
 
+const ROMDOUL_LOGO_URL = '/src/assets/images/romdoul_caffee_logo_1794272922476.jpg';
+
 const HERO_SLIDES = [
   {
-    titleKh: 'កាហ្វេពិសេស វំយោលកាហ្វេ',
+    titleKh: 'កាហ្វេពិសេស រំដួលកាហ្វេ (Romdoul Caffee)',
     subtitleKh: 'ក្លិនឈ្ងុយ ផ្អែមល្មម ឆុងថ្មីៗប្រចាំថ្ងៃតាមស្តង់ដារវិជ្ជាជីវៈ',
     imageUrl: '/src/assets/images/coffee_hot_cappuccino_1794121755636.jpg',
   },
   {
-    titleKh: 'តែបៃតង & ម៉ាត់ឆាឡាតេ',
+    titleKh: 'តែបៃតង & ម៉ាត់ឆាឡាតេ រំដួលកាហ្វេ',
     subtitleKh: 'ក្លិនឈ្ងុយ ផ្អែមល្មម ត្រជាក់ស្រួល',
     imageUrl: '/src/assets/images/drink_matcha_latte_1794121757123.jpg',
   },
   {
-    titleKh: 'កាហ្វេទឹកដោះគោទឹកកក វំយោល',
+    titleKh: 'កាហ្វេទឹកដោះគោទឹកកក រំដួលពិសេស',
     subtitleKh: 'រសជាតិដិតឈ្ងុយ លាយទឹកដោះគោស្រស់ និងស្ករត្នោតធម្មជាតិ',
     imageUrl: '/src/assets/images/coffee_iced_latte_1794121754785.jpg',
   },
@@ -159,6 +162,21 @@ export default function App() {
     liveTokenConfigured: boolean;
   } | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [customerPaidNotification, setCustomerPaidNotification] = useState<{
+    orderNumber: string;
+    customerName: string;
+    tableOrType: string;
+    totalUsd: number;
+    totalKhr: number;
+    paymentMethod: string;
+  } | null>(null);
+
+  const seenInvoiceIdsRef = useRef<Set<string>>(new Set());
+  const initialInvoicesLoadedRef = useRef<boolean>(false);
+  const adminJwtTokenRef = useRef<string | null>(null);
+  useEffect(() => {
+    adminJwtTokenRef.current = adminJwtToken;
+  }, [adminJwtToken]);
 
   const [publicOrderSearch, setPublicOrderSearch] = useState<string>('');
   const [publicInvoiceSearch, setPublicInvoiceSearch] = useState<string>('');
@@ -259,6 +277,21 @@ export default function App() {
           }));
           list.sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
           setInvoices(list);
+
+          if (!initialInvoicesLoadedRef.current) {
+            list.forEach((inv) => seenInvoiceIdsRef.current.add(inv.id));
+            initialInvoicesLoadedRef.current = true;
+          } else {
+            for (const inv of list) {
+              if (!seenInvoiceIdsRef.current.has(inv.id)) {
+                seenInvoiceIdsRef.current.add(inv.id);
+                // Only pop up the receipt (បុង) automatically if Admin is logged in!
+                if (adminJwtTokenRef.current) {
+                  setSelectedInvoice(inv);
+                }
+              }
+            }
+          }
         },
         (err) => {
           console.warn('Invoices listener warning:', err);
@@ -742,6 +775,7 @@ export default function App() {
         bakongTransactionId,
         issuedAt: paidAt || new Date().toISOString(),
       };
+      seenInvoiceIdsRef.current.add(generatedInvoice.id);
       await createInvoiceInDb(generatedInvoice);
 
       setCart([]);
@@ -751,9 +785,23 @@ export default function App() {
       setPromoFeedback('');
       setRedeemLoyaltyReward(false);
       setActiveKhqrSession(null);
-      setSelectedInvoice(generatedInvoice);
+
+      // Do NOT pop up the receipt (បុង) for the customer!
+      // Only pop up the receipt if Admin is authenticated.
+      if (adminJwtToken) {
+        setSelectedInvoice(generatedInvoice);
+      } else {
+        setCustomerPaidNotification({
+          orderNumber: order.orderNumber,
+          customerName: order.customerName,
+          tableOrType: order.tableOrType,
+          totalUsd: order.totalUsd,
+          totalKhr: order.totalKhr,
+          paymentMethod: resolvedPaymentMethodLabel,
+        });
+      }
     },
-    [activeKhqrSession, appliedPromo, redeemLoyaltyReward, soundEnabled]
+    [activeKhqrSession, appliedPromo, redeemLoyaltyReward, soundEnabled, adminJwtToken]
   );
 
   const handleCancelActiveOrder = useCallback(async () => {
@@ -825,9 +873,10 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-[#0B0E14] text-[#F3F4F6]">
       {/* =====================================================================
-          TOP NAVIGATION BAR (Dark Obsidian & Vibrant Gold Style)
+          TOP NAVIGATION BAR (Romdoul Caffee + Full RGB Neon Lighting)
          ===================================================================== */}
       <header className="sticky top-0 z-30 bg-[#090C11]/95 backdrop-blur-md">
+        <div className="rgb-line" />
         <div className="max-w-[1440px] mx-auto flex items-center justify-between gap-4 px-4 sm:px-8 py-3">
           {/* Left Brand Emblem & Name */}
           <a
@@ -836,41 +885,49 @@ export default function App() {
               e.preventDefault();
               setActiveView('storefront');
             }}
-            className="flex items-center gap-3 shrink-0"
+            className="flex items-center gap-3 shrink-0 group"
           >
-            <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#131C2E] to-[#090D16] border-2 border-emerald-400 shadow-[0_0_15px_rgba(250,204,21,0.35)] flex items-center justify-center">
-              <Coffee className="w-5 h-5 text-[#FACC15]" />
+            <div className="rgb-logo-ring rounded-full flex items-center justify-center shrink-0">
+              <ProductImage
+                src={ROMDOUL_LOGO_URL}
+                alt="Romdoul Caffee Logo"
+                className="w-11 h-11 rounded-full object-cover bg-[#0B0E14]"
+              />
             </div>
             <div>
-              <div className="text-lg sm:text-xl font-extrabold tracking-tight text-[#FACC15] leading-none">
-                វំយោលកាហ្វេ
+              <div className="text-lg sm:text-xl font-extrabold tracking-tight rgb-text leading-none">
+                រំដួលកាហ្វេ
               </div>
-              <div className="text-[10px] font-bold tracking-[0.18em] text-slate-400 uppercase mt-1">
-                VOMYOL COFFEE
+              <div className="text-[10px] font-extrabold tracking-[0.18em] text-[#FACC15] uppercase mt-1">
+                ROMDOUL CAFFEE
               </div>
             </div>
           </a>
 
-          {/* Center Navigation Buttons */}
+          {/* Center Navigation Buttons with RGB Pills */}
           <nav className="hidden lg:flex items-center gap-3">
             <button
               onClick={() => setActiveView('storefront')}
               className={`px-4 py-2 text-xs font-bold rounded-full transition-all inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                 activeView === 'storefront'
-                  ? 'text-white bg-[#1A202E] border border-[#333D52]'
-                  : 'text-slate-300 hover:text-white'
+                  ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_20px_rgba(250,204,21,0.45)]'
+                  : 'rgb-pill text-slate-200 hover:text-white'
               }`}
             >
-              <Store className="w-4 h-4 text-[#FACC15]" />
+              <Store
+                className={`w-4 h-4 ${
+                  activeView === 'storefront' ? 'text-[#0B0E14]' : 'text-[#FACC15]'
+                }`}
+              />
               <span>ហាងទំនិញ (POS)</span>
             </button>
 
             <button
               onClick={() => setActiveView('admin')}
-              className={`px-4 py-2 text-xs font-bold rounded-full transition-all inline-flex items-center gap-2 whitespace-nowrap shrink-0 border ${
+              className={`px-4 py-2 text-xs font-bold rounded-full transition-all inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                 activeView === 'admin'
-                  ? 'bg-[#FACC15] text-[#0B0E14] border-[#FACC15]'
-                  : 'bg-[#FACC15]/10 text-[#FACC15] border-[#FACC15]/40 hover:border-[#FACC15]'
+                  ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_20px_rgba(250,204,21,0.45)]'
+                  : 'rgb-pill text-[#FACC15] hover:text-white'
               }`}
             >
               <span>ប្រព័ន្ធគ្រប់គ្រង (Admin)</span>
@@ -879,35 +936,41 @@ export default function App() {
 
             <button
               onClick={() => setActiveView('orders')}
-              className={`px-4 py-2 text-xs font-bold rounded-full transition-all inline-flex items-center gap-2 whitespace-nowrap shrink-0 border ${
+              className={`px-4 py-2 text-xs font-bold rounded-full transition-all inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
                 activeView === 'orders'
-                  ? 'bg-[#FACC15] text-[#0B0E14] border-[#FACC15]'
-                  : 'bg-[#121620] text-[#FACC15] border-[#FACC15]/40 hover:border-[#FACC15]'
+                  ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_20px_rgba(250,204,21,0.45)]'
+                  : 'rgb-pill text-[#FACC15] hover:text-white'
               }`}
             >
               <Receipt className="w-3.5 h-3.5" />
               <span>ការកម្មង់ខ្ញុំ ({orders.length})</span>
             </button>
 
-            <button
-              onClick={() => setActiveView('invoices')}
-              className={`px-4 py-2 text-xs font-bold rounded-full transition-all inline-flex items-center gap-2 whitespace-nowrap shrink-0 border ${
-                activeView === 'invoices'
-                  ? 'bg-[#FACC15] text-[#0B0E14] border-[#FACC15]'
-                  : 'bg-[#121620] text-slate-200 border-[#2A3241] hover:border-[#FACC15]/60'
-              }`}
-            >
-              <FileText className="w-3.5 h-3.5 text-[#FACC15]" />
-              <span>វិក្កយបត្រ ({invoices.length})</span>
-            </button>
+            {adminJwtToken && (
+              <button
+                onClick={() => setActiveView('invoices')}
+                className={`px-4 py-2 text-xs font-bold rounded-full transition-all inline-flex items-center gap-2 whitespace-nowrap shrink-0 ${
+                  activeView === 'invoices'
+                    ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_20px_rgba(250,204,21,0.45)]'
+                    : 'rgb-pill text-slate-200 hover:text-white'
+                }`}
+              >
+                <Printer
+                  className={`w-3.5 h-3.5 ${
+                    activeView === 'invoices' ? 'text-[#0B0E14]' : 'text-[#FACC15]'
+                  }`}
+                />
+                <span>ព្រីនបុង ({invoices.length})</span>
+              </button>
+            )}
           </nav>
 
-          {/* Right Cart, Currency & Live Clock */}
+          {/* Right Cart, Admin & Live Clock */}
           <div className="flex items-center gap-3 shrink-0">
-            {/* Cart Button with Neon Gradient Border & Counter Badge */}
+            {/* Cart Button with Flowing RGB Frame & Counter Badge */}
             <button
               onClick={() => setIsCartOpen(true)}
-              className="relative p-[1.5px] rounded-full bg-gradient-to-r from-pink-500 via-[#FACC15] to-emerald-400 hover:brightness-110 transition-all"
+              className="relative rgb-frame rounded-full hover:brightness-110 transition-all"
             >
               <div className="px-4 py-2 rounded-full bg-[#11151F] flex items-center gap-2 text-xs font-bold text-[#FACC15]">
                 <ShoppingBag className="w-4 h-4 text-[#FACC15]" />
@@ -925,7 +988,7 @@ export default function App() {
 
             <button
               onClick={() => setActiveView('admin')}
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-200 bg-[#131822] border border-[#2D3648] rounded-full hover:border-[#FACC15] transition-colors whitespace-nowrap"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-200 rgb-pill rounded-full hover:text-[#FACC15] transition-colors whitespace-nowrap"
             >
               <span>{adminJwtToken ? `Admin (${adminUser?.username})` : 'ចូលគណនី Admin'}</span>
             </button>
@@ -943,18 +1006,18 @@ export default function App() {
           </div>
         </div>
 
-        {/* Multi-color Neon Bottom Accent Line */}
-        <div className="h-[2px] w-full bg-gradient-to-r from-emerald-500 via-[#FACC15] to-purple-600 opacity-85" />
+        {/* Flowing Animated RGB Laser Strip */}
+        <div className="rgb-line" />
       </header>
 
-      {/* Mobile Navigation Bar */}
-      <div className="lg:hidden flex items-center justify-around border-b border-[#1E2532] bg-[#0E121A] px-2 py-2 text-xs font-bold">
+      {/* Mobile Navigation Bar with RGB Pills */}
+      <div className="lg:hidden flex items-center justify-around bg-[#0E121A] px-2 py-2 text-xs font-bold">
         <button
           onClick={() => setActiveView('storefront')}
           className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
             activeView === 'storefront'
               ? 'bg-[#FACC15] text-[#0B0E14]'
-              : 'text-slate-300'
+              : 'rgb-pill text-slate-200'
           }`}
         >
           ហាងទំនិញ (POS)
@@ -964,43 +1027,90 @@ export default function App() {
           className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
             activeView === 'orders'
               ? 'bg-[#FACC15] text-[#0B0E14]'
-              : 'text-slate-300'
+              : 'rgb-pill text-slate-200'
           }`}
         >
           ការកម្មង់ ({orders.length})
         </button>
-        <button
-          onClick={() => setActiveView('invoices')}
-          className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
-            activeView === 'invoices'
-              ? 'bg-[#FACC15] text-[#0B0E14]'
-              : 'text-slate-300'
-          }`}
-        >
-          វិក្កយបត្រ
-        </button>
+        {adminJwtToken && (
+          <button
+            onClick={() => setActiveView('invoices')}
+            className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
+              activeView === 'invoices'
+                ? 'bg-[#FACC15] text-[#0B0E14]'
+                : 'rgb-pill text-slate-200'
+            }`}
+          >
+            ព្រីនបុង
+          </button>
+        )}
         <button
           onClick={() => setActiveView('admin')}
           className={`px-3 py-1.5 rounded-lg whitespace-nowrap ${
             activeView === 'admin'
               ? 'bg-[#FACC15] text-[#0B0E14]'
-              : 'text-slate-300'
+              : 'rgb-pill text-slate-200'
           }`}
         >
           Admin
         </button>
       </div>
+      <div className="lg:hidden rgb-line" />
 
       {/* =====================================================================
           MAIN WORKSPACE CONTENT
          ===================================================================== */}
       <main className="flex-1 max-w-[1440px] w-full mx-auto px-4 sm:px-8 py-6">
+        {/* Customer Payment Completed Banner (No Receipt Popup for Customer) */}
+        {customerPaidNotification && (
+          <div className="mb-6 rgb-card rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-400/50 flex items-center justify-center shrink-0 mt-0.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400" />
+              </div>
+              <div>
+                <div className="text-sm sm:text-base font-extrabold text-[#FACC15]">
+                  ការបង់ប្រាក់ជោគជ័យ! សូមអរគុណសម្រាប់ការកម្មង់ពី «រំដួលកាហ្វេ»
+                </div>
+                <p className="text-xs text-slate-200 mt-1">
+                  លេខកម្មង់៖ <strong className="text-white tabular-nums">{customerPaidNotification.orderNumber}</strong> ·{' '}
+                  <span>{customerPaidNotification.customerName} ({customerPaidNotification.tableOrType})</span> ·{' '}
+                  <strong className="text-emerald-400 tabular-nums">
+                    {formatUsd(customerPaidNotification.totalUsd)} ({formatKhr(customerPaidNotification.totalKhr, true)})
+                  </strong>
+                </p>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  ការកម្មង់របស់អ្នកត្រូវបានបញ្ជូនទៅកាន់ផ្នែកឆុងភេសជ្ជៈរួចរាល់ហើយ (ការបោះពុម្ពបុង/វិក្កយបត្រគឺសម្រាប់តែ Admin ប៉ុណ្ណោះ)។
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  setActiveView('orders');
+                  setCustomerPaidNotification(null);
+                }}
+                className="px-3.5 py-2 text-xs font-extrabold bg-[#FACC15] text-[#0B0E14] rounded-xl hover:brightness-105 transition-all whitespace-nowrap"
+              >
+                តាមដានស្ថានភាពភេសជ្ជៈ
+              </button>
+              <button
+                onClick={() => setCustomerPaidNotification(null)}
+                className="p-2 text-slate-400 hover:text-white rounded-lg"
+                aria-label="បិទ"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* VIEW 1: CUSTOMER STOREFRONT & ONLINE ORDERING */}
         {activeView === 'storefront' && (
           <div className="space-y-6">
             {/* Active QR Table Banner if scanned via ?table=XX */}
             {qrScannedTable && (
-              <div className="bg-emerald-950/70 border border-emerald-500/60 rounded-2xl px-5 py-3 flex items-center justify-between gap-3 text-xs">
+              <div className="rgb-card rounded-2xl px-5 py-3 flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2.5">
                   <QrCode className="w-5 h-5 text-[#FACC15] shrink-0" />
                   <div>
@@ -1021,9 +1131,9 @@ export default function App() {
               </div>
             )}
 
-            {/* 1. Glowing Gradient Border Hero Banner Carousel */}
-            <section className="p-[1.5px] rounded-2xl bg-gradient-to-r from-purple-500 via-[#FACC15] to-emerald-400 shadow-[0_8px_30px_rgba(0,0,0,0.45)]">
-              <div className="relative h-[230px] sm:h-[290px] w-full rounded-[15px] overflow-hidden bg-[#12161F]">
+            {/* 1. Flowing RGB Neon Border Hero Banner Carousel */}
+            <section className="rgb-frame rounded-2xl">
+              <div className="relative h-[230px] sm:h-[290px] w-full rounded-[14px] overflow-hidden bg-[#12161F]">
                 <ProductImage
                   src={currentHero.imageUrl}
                   alt={currentHero.titleKh}
@@ -1031,6 +1141,18 @@ export default function App() {
                 />
                 {/* Measured Dark Gradient Scrim for Contrast */}
                 <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/45 to-black/30 flex flex-col justify-center px-6 sm:px-12">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="rgb-logo-ring rounded-full shrink-0">
+                      <ProductImage
+                        src={ROMDOUL_LOGO_URL}
+                        alt="Romdoul Caffee Logo"
+                        className="w-10 h-10 sm:w-12 sm:h-12 rounded-full object-cover bg-[#0B0E14]"
+                      />
+                    </div>
+                    <span className="px-3 py-1 rounded-full rgb-pill text-[11px] font-extrabold text-[#FACC15] tracking-wider uppercase">
+                      ROMDOUL CAFFEE · រំដួលកាហ្វេ
+                    </span>
+                  </div>
                   <h1 className="text-2xl sm:text-4xl font-extrabold text-[#FACC15] drop-shadow-md">
                     {currentHero.titleKh}
                   </h1>
@@ -1057,7 +1179,7 @@ export default function App() {
               </div>
             </section>
 
-            {/* 2. Two Large Segmented Action Tabs (ភេសជ្ជៈ vs ម្ហូបអាហារ & នំដុត) */}
+            {/* 2. Two Large Segmented Action Tabs with RGB Borders (ភេសជ្ជៈ vs ម្ហូបអាហារ & នំដុត) */}
             <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
                 onClick={() => {
@@ -1066,12 +1188,12 @@ export default function App() {
                 }}
                 className={`py-4 px-6 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all ${
                   mainSectionTab === 'drinks'
-                    ? 'bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-[#0B0E14] shadow-[0_0_25px_rgba(250,204,21,0.25)]'
-                    : 'bg-[#121620] border border-[#2A3342] text-[#FACC15] hover:border-[#FACC15]/60'
+                    ? 'bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-[#0B0E14] shadow-[0_0_25px_rgba(250,204,21,0.35)]'
+                    : 'rgb-card text-[#FACC15]'
                 }`}
               >
                 <Coffee className="w-5 h-5" />
-                <span>ភេសជ្ជៈ</span>
+                <span>ភេសជ្ជៈ (Drinks & Coffee)</span>
               </button>
 
               <button
@@ -1082,21 +1204,25 @@ export default function App() {
                 }}
                 className={`py-4 px-6 rounded-2xl font-extrabold text-sm sm:text-base flex items-center justify-center gap-2.5 transition-all ${
                   mainSectionTab === 'food'
-                    ? 'bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-[#0B0E14] shadow-[0_0_25px_rgba(250,204,21,0.25)]'
-                    : 'bg-[#121620] border border-[#2D3823] text-[#FACC15] hover:border-[#FACC15]/60'
+                    ? 'bg-gradient-to-r from-[#FACC15] to-[#F59E0B] text-[#0B0E14] shadow-[0_0_25px_rgba(250,204,21,0.35)]'
+                    : 'rgb-card text-[#FACC15]'
                 }`}
               >
                 <Utensils className="w-5 h-5" />
-                <span>ម្ហូបអាហារ & នំដុត</span>
+                <span>ម្ហូបអាហារ & នំដុត (Bakery & Food)</span>
               </button>
             </section>
 
-            {/* 3. Storefront Title Bar, Category Filter Pills & Search Box */}
-            <section className="bg-[#11151E] border border-[#1E2532] rounded-2xl px-5 py-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
+            {/* 3. Storefront Title Bar, Category Filter Pills & Search Box with RGB Frame */}
+            <section className="rgb-card rounded-2xl px-5 py-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
               <div className="space-y-1">
-                <div className="flex items-center gap-2 text-lg sm:text-xl font-extrabold text-[#FACC15]">
-                  <Store className="w-5 h-5 text-[#FACC15]" />
-                  <span>កម្មង់ទំនិញ វំយោលកាហ្វេ</span>
+                <div className="flex items-center gap-2.5 text-lg sm:text-xl font-extrabold text-[#FACC15]">
+                  <ProductImage
+                    src={ROMDOUL_LOGO_URL}
+                    alt="Romdoul Caffee"
+                    className="w-7 h-7 rounded-full object-cover border border-[#FACC15]"
+                  />
+                  <span className="rgb-text">កម្មង់ទំនិញ រំដួលកាហ្វេ (Romdoul Caffee)</span>
                 </div>
                 <p className="text-xs text-slate-400">
                   ចុចលើភេសជ្ជៈដើម្បីជ្រើសរើសទំហំកែវ កម្រិតជាតិស្ករ ទឹកកក និង Toppings តាមចំណូលចិត្ត
@@ -1112,8 +1238,8 @@ export default function App() {
                   }}
                   className={`px-4 py-2 text-xs font-extrabold rounded-full transition-all whitespace-nowrap shrink-0 ${
                     selectedCategoryId === 'ALL'
-                      ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_15px_rgba(250,204,21,0.3)]'
-                      : 'bg-[#1A202E] border border-[#2D3748] text-slate-300 hover:text-white'
+                      ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_15px_rgba(250,204,21,0.35)]'
+                      : 'rgb-pill text-slate-200 hover:text-white'
                   }`}
                 >
                   ទាំងអស់
@@ -1125,8 +1251,8 @@ export default function App() {
                     onClick={() => setSelectedCategoryId(cat.id)}
                     className={`px-4 py-2 text-xs font-bold rounded-full transition-all whitespace-nowrap shrink-0 ${
                       selectedCategoryId === cat.id
-                        ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_15px_rgba(250,204,21,0.3)]'
-                        : 'bg-[#1A202E] border border-[#2D3748] text-slate-300 hover:text-white'
+                        ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_15px_rgba(250,204,21,0.35)]'
+                        : 'rgb-pill text-slate-200 hover:text-white'
                     }`}
                   >
                     {cat.nameKh}
@@ -1134,7 +1260,7 @@ export default function App() {
                 ))}
 
                 {/* Currency Switcher (USD / KHR) */}
-                <div className="flex items-center bg-[#1A202E] border border-[#2D3748] rounded-full p-0.5">
+                <div className="flex items-center rgb-pill rounded-full p-0.5">
                   <button
                     onClick={() => setCurrency('USD')}
                     className={`px-3 py-1.5 text-xs font-bold rounded-full transition-colors tabular-nums ${
@@ -1153,32 +1279,32 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Dark Search Input */}
+                {/* Dark Search Input with RGB Border */}
                 <div className="relative flex-1 sm:w-52">
-                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <Search className="w-4 h-4 text-[#FACC15] absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="ស្វែងរកមុខម្ហូប..."
-                    className="w-full pl-9 pr-3 py-2 text-xs bg-[#1C222E] text-white border border-[#2E3846] rounded-lg focus:outline-none focus:border-[#FACC15]"
+                    className="w-full pl-9 pr-3 py-2 text-xs rgb-card-dark text-white rounded-lg focus:outline-none"
                   />
                 </div>
               </div>
             </section>
 
-            {/* 4. 4-Column Product Grid matching the reference card design */}
+            {/* 4. 4-Column Product Grid with Animated RGB Neon Borders on Every Card */}
             {loadingDb ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
                 {[1, 2, 3, 4].map((n) => (
                   <div
                     key={n}
-                    className="bg-[#141821] border border-[#222938] rounded-2xl h-80 animate-pulse"
+                    className="rgb-card rounded-2xl h-80 animate-pulse"
                   />
                 ))}
               </div>
             ) : visibleMenuItems.length === 0 ? (
-              <div className="bg-[#141821] border border-[#222938] rounded-2xl p-12 text-center space-y-2">
+              <div className="rgb-card rounded-2xl p-12 text-center space-y-2">
                 <div className="text-base font-bold text-[#FACC15]">
                   រកមិនឃើញមុខម្ហូបដែលអ្នកកំពុងស្វែងរកនោះទេ
                 </div>
@@ -1202,9 +1328,9 @@ export default function App() {
                       onClick={() => {
                         if (canOrder) setCustomizingItem(item);
                       }}
-                      className={`group bg-[#141821] border border-[#222938] rounded-2xl p-3.5 flex flex-col justify-between transition-all duration-150 ${
+                      className={`group rgb-card rounded-2xl p-3.5 flex flex-col justify-between transition-all duration-150 ${
                         canOrder
-                          ? 'cursor-pointer hover:-translate-y-1 hover:border-[#FACC15]/60 hover:shadow-[0_8px_25px_rgba(0,0,0,0.5)]'
+                          ? 'cursor-pointer hover:-translate-y-1'
                           : 'opacity-75 cursor-not-allowed'
                       }`}
                     >
@@ -1300,23 +1426,23 @@ export default function App() {
         {/* VIEW 2: LIVE ORDER TRACKING */}
         {activeView === 'orders' && (
           <div className="space-y-6">
-            <div className="bg-[#131722] border border-[#262E3D] rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="rgb-card rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
-                <h1 className="text-2xl font-bold text-[#FACC15]">
+                <h1 className="text-2xl font-bold rgb-text">
                   តាមដានស្ថានភាពការកម្មង់ ({orders.length})
                 </h1>
                 <p className="text-xs text-slate-400 mt-1">
-                  ពិនិត្យស្ថានភាពភេសជ្ជៈដែលបានកម្មង់ ការផ្ទៀងផ្ទាត់ការបង់ប្រាក់ KHQR និងបោះពុម្ពវិក្កយបត្រ
+                  ពិនិត្យស្ថានភាពភេសជ្ជៈដែលបានកម្មង់ និងការផ្ទៀងផ្ទាត់ការបង់ប្រាក់ KHQR
                 </p>
               </div>
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <Search className="w-4 h-4 text-[#FACC15] absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="text"
                   value={publicOrderSearch}
                   onChange={(e) => setPublicOrderSearch(e.target.value)}
                   placeholder="ស្វែងរកលេខការកម្មង់ ឬឈ្មោះ..."
-                  className="pl-9 pr-4 py-2 text-xs bg-[#0B0E14] text-white border border-[#2A3241] rounded-xl w-64"
+                  className="pl-9 pr-4 py-2 text-xs rgb-card-dark text-white rounded-xl w-64"
                 />
               </div>
             </div>
@@ -1344,12 +1470,12 @@ export default function App() {
                   return (
                     <div
                       key={order.id}
-                      className="bg-[#131722] border border-[#262E3D] rounded-2xl p-6 flex flex-col justify-between space-y-4"
+                      className="rgb-card rounded-2xl p-6 flex flex-col justify-between space-y-4"
                     >
                       <div className="space-y-3">
                         <div className="flex items-center justify-between text-xs text-slate-400 pb-3 border-b border-[#222938]">
                           <span className="font-bold text-[#FACC15] tabular-nums">
-                            {order.orderNumber} · {order.invoiceNumber}
+                            {order.orderNumber}
                           </span>
                           <span className="tabular-nums">
                             {new Date(order.createdAt).toLocaleString('km-KH')}
@@ -1430,19 +1556,20 @@ export default function App() {
                           {order.paymentStatus === 'PENDING' && (
                             <button
                               onClick={() => handleResumeKhqrForOrder(order)}
-                              className="px-3.5 py-2 text-xs font-bold text-white bg-[#003D6B] border border-[#005B9F] rounded-xl hover:bg-[#004A80] transition-colors inline-flex items-center gap-1.5"
+                              className="rgb-pill px-3.5 py-2 text-xs font-bold text-white rounded-xl hover:brightness-110 transition-colors inline-flex items-center gap-1.5"
                             >
                               <QrCode className="w-3.5 h-3.5 text-[#FACC15]" />
-                              <span>បង្ហាញ ABA PAY / KHQR</span>
+                              <span>បង្ហាញ ABA / ACLEDA KHQR</span>
                             </button>
                           )}
-                          {linkedInvoice && (
+                          {/* Only Admin can pop up and print the receipt (បុង) */}
+                          {adminJwtToken && linkedInvoice && (
                             <button
                               onClick={() => setSelectedInvoice(linkedInvoice)}
                               className="px-3.5 py-2 text-xs font-bold text-[#0B0E14] bg-[#FACC15] rounded-xl hover:brightness-105 transition-all inline-flex items-center gap-1.5"
                             >
-                              <FileText className="w-3.5 h-3.5" />
-                              <span>មើលវិក្កយបត្រ</span>
+                              <Printer className="w-3.5 h-3.5" />
+                              <span>ព្រីនបុង (Admin)</span>
                             </button>
                           )}
                         </div>
@@ -1454,80 +1581,100 @@ export default function App() {
           </div>
         )}
 
-        {/* VIEW 3: INVOICES ARCHIVE */}
+        {/* VIEW 3: INVOICES ARCHIVE (ADMIN ONLY) */}
         {activeView === 'invoices' && (
-          <div className="bg-[#131722] border border-[#262E3D] rounded-2xl p-6 space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h1 className="text-2xl font-bold text-[#FACC15]">
-                  ប្រព័ន្ធវិក្កយបត្រផ្លូវការ ({invoices.length})
-                </h1>
-                <p className="text-xs text-slate-400 mt-1">
-                  វិក្កយបត្រទាំងអស់ដែលបានបង្កើតដោយស្វ័យប្រវត្តិបន្ទាប់ពីផ្ទៀងផ្ទាត់ការបង់ប្រាក់ KHQR ជោគជ័យ
-                </p>
+          adminJwtToken ? (
+            <div className="rgb-card rounded-2xl p-6 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold rgb-text">
+                    ប្រព័ន្ធព្រីនបុង និងវិក្កយបត្រផ្លូវការ · សម្រាប់តែ Admin ({invoices.length})
+                  </h1>
+                  <p className="text-xs text-slate-400 mt-1">
+                    មានតែគណនី Admin ប៉ុណ្ណោះដែលអាចបើកមើល និងបោះពុម្ពបុង (វិក្កយបត្រ) ជូនអតិថិជនបាន
+                  </p>
+                </div>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-[#FACC15] absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={publicInvoiceSearch}
+                    onChange={(e) => setPublicInvoiceSearch(e.target.value)}
+                    placeholder="ស្វែងរកលេខវិក្កយបត្រ..."
+                    className="pl-9 pr-4 py-2 text-xs rgb-card-dark text-white rounded-xl w-64"
+                  />
+                </div>
               </div>
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={publicInvoiceSearch}
-                  onChange={(e) => setPublicInvoiceSearch(e.target.value)}
-                  placeholder="ស្វែងរកលេខវិក្កយបត្រ..."
-                  className="pl-9 pr-4 py-2 text-xs bg-[#0B0E14] text-white border border-[#2A3241] rounded-xl w-64"
-                />
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {invoices
-                .filter((inv) => {
-                  if (!publicInvoiceSearch.trim()) return true;
-                  const q = publicInvoiceSearch.toLowerCase();
-                  return (
-                    inv.invoiceNumber.toLowerCase().includes(q) ||
-                    inv.orderNumber.toLowerCase().includes(q) ||
-                    inv.customerName.toLowerCase().includes(q)
-                  );
-                })
-                .map((inv) => (
-                  <div
-                    key={inv.id}
-                    className="border border-[#262E3D] rounded-xl p-5 bg-[#0B0E14] flex flex-col justify-between space-y-4"
-                  >
-                    <div className="space-y-1.5">
-                      <div className="text-xs text-slate-400 tabular-nums">
-                        {new Date(inv.issuedAt).toLocaleString('km-KH')}
-                      </div>
-                      <div className="text-base font-bold text-white tabular-nums">
-                        {inv.invoiceNumber}
-                      </div>
-                      <div className="text-xs text-slate-400">
-                        អតិថិជន៖ <strong className="text-white">{inv.customerName}</strong> ·
-                        កម្មង់៖ <span className="tabular-nums">{inv.orderNumber}</span>
-                      </div>
-                    </div>
-
-                    <div className="pt-3 border-t border-[#222938] flex items-center justify-between">
-                      <div>
-                        <div className="text-sm font-extrabold text-[#FACC15] tabular-nums">
-                          {formatUsd(inv.totalUsd)}
-                        </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {invoices
+                  .filter((inv) => {
+                    if (!publicInvoiceSearch.trim()) return true;
+                    const q = publicInvoiceSearch.toLowerCase();
+                    return (
+                      inv.invoiceNumber.toLowerCase().includes(q) ||
+                      inv.orderNumber.toLowerCase().includes(q) ||
+                      inv.customerName.toLowerCase().includes(q)
+                    );
+                  })
+                  .map((inv) => (
+                    <div
+                      key={inv.id}
+                      className="rgb-card-dark rounded-xl p-5 flex flex-col justify-between space-y-4"
+                    >
+                      <div className="space-y-1.5">
                         <div className="text-xs text-slate-400 tabular-nums">
-                          {formatKhr(inv.totalKhr, true)}
+                          {new Date(inv.issuedAt).toLocaleString('km-KH')}
+                        </div>
+                        <div className="text-base font-bold text-white tabular-nums">
+                          {inv.invoiceNumber}
+                        </div>
+                        <div className="text-xs text-slate-400">
+                          អតិថិជន៖ <strong className="text-white">{inv.customerName}</strong> ·
+                          កម្មង់៖ <span className="tabular-nums">{inv.orderNumber}</span>
                         </div>
                       </div>
-                      <button
-                        onClick={() => setSelectedInvoice(inv)}
-                        className="px-3.5 py-2 text-xs font-bold text-[#0B0E14] bg-[#FACC15] rounded-xl hover:brightness-105 transition-all inline-flex items-center gap-1.5"
-                      >
-                        <FileText className="w-3.5 h-3.5" />
-                        <span>បោះពុម្ព / PDF</span>
-                      </button>
+
+                      <div className="pt-3 border-t border-[#222938] flex items-center justify-between">
+                        <div>
+                          <div className="text-sm font-extrabold text-[#FACC15] tabular-nums">
+                            {formatUsd(inv.totalUsd)}
+                          </div>
+                          <div className="text-xs text-slate-400 tabular-nums">
+                            {formatKhr(inv.totalKhr, true)}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => setSelectedInvoice(inv)}
+                          className="px-3.5 py-2 text-xs font-bold text-[#0B0E14] bg-[#FACC15] rounded-xl hover:brightness-105 transition-all inline-flex items-center gap-1.5"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>ព្រីនបុង / PDF</span>
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+              </div>
             </div>
-          </div>
+          ) : (
+            <AdminDashboard
+              categories={categories}
+              menuItems={menuItems}
+              orders={orders}
+              invoices={invoices}
+              backups={backups}
+              promoCodes={promoCodes}
+              loyaltyMembers={loyaltyMembers}
+              expenses={expenses}
+              onSelectInvoice={(inv) => setSelectedInvoice(inv)}
+              jwtToken={adminJwtToken}
+              setJwtToken={setAdminJwtToken}
+              adminUser={adminUser}
+              setAdminUser={setAdminUser}
+              soundEnabled={soundEnabled}
+              setSoundEnabled={setSoundEnabled}
+            />
+          )
         )}
 
         {/* VIEW 4: SECURE ADMIN MANAGEMENT PORTAL */}
@@ -1567,14 +1714,23 @@ export default function App() {
          ===================================================================== */}
       {isCartOpen && (
         <div className="fixed inset-0 z-40 flex justify-end bg-black/75 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-[#131722] text-white h-[100dvh] flex flex-col justify-between shadow-2xl border-l border-[#262E3D]">
+          <div className="w-full max-w-md rgb-modal text-white h-[100dvh] flex flex-col justify-between">
             {/* Cart Drawer Header */}
-            <div className="shrink-0 px-4 py-3.5 bg-[#0B0E14] border-b border-[#262E3D] flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-[#FACC15]">
-                  កន្ត្រកកម្មង់ភេសជ្ជៈ ({cartSummary.totalItemsCount})
-                </h2>
-                <p className="text-[11px] text-slate-400">វំយោលកាហ្វេ · គណនាតម្លៃសរុបដោយស្វ័យប្រវត្តិ</p>
+            <div className="shrink-0 px-4 py-3.5 bg-[#0B0E14] flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <ProductImage
+                  src={ROMDOUL_LOGO_URL}
+                  alt="Romdoul Caffee"
+                  className="w-9 h-9 rounded-full object-cover border border-[#FACC15]"
+                />
+                <div>
+                  <h2 className="text-base font-bold text-[#FACC15]">
+                    កន្ត្រកកម្មង់ភេសជ្ជៈ ({cartSummary.totalItemsCount})
+                  </h2>
+                  <p className="text-[11px] text-slate-400">
+                    រំដួលកាហ្វេ (Romdoul Caffee) · គណនាតម្លៃសរុបស្វ័យប្រវត្តិ
+                  </p>
+                </div>
               </div>
               <button
                 onClick={() => setIsCartOpen(false)}
@@ -1584,6 +1740,7 @@ export default function App() {
                 <X className="w-5 h-5" />
               </button>
             </div>
+            <div className="rgb-line shrink-0" />
 
             {/* Cart Items, Promo Code & Customer Loyalty Form */}
             <div className="flex-1 overflow-y-auto overscroll-contain p-4 space-y-4">
@@ -1664,8 +1821,8 @@ export default function App() {
                     })}
                   </div>
 
-                  {/* Promo Code Box */}
-                  <div className="p-3 rounded-xl bg-[#0B0E14] border border-[#262E3D] space-y-1.5">
+                  {/* Promo Code Box with RGB border */}
+                  <div className="p-3 rounded-xl rgb-card-dark space-y-1.5">
                     <label className="block text-[11px] font-bold text-[#FACC15] flex items-center gap-1.5">
                       <Tag className="w-3.5 h-3.5" />
                       <span>កូដបញ្ចុះតម្លៃ (Promo Code)</span>
@@ -1675,7 +1832,7 @@ export default function App() {
                         type="text"
                         value={promoInput}
                         onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
-                        placeholder="ឧ. VOMYOL10"
+                        placeholder="ឧ. ROMDOUL10"
                         className="flex-1 px-2.5 py-1.5 text-xs bg-[#131722] text-white border border-[#2A3241] rounded-lg uppercase font-bold"
                       />
                       <button
@@ -1815,108 +1972,111 @@ export default function App() {
 
             {/* Compact Cart Footer Totals, Multi-Bank Selector & KHQR Checkout Buttons */}
             {cart.length > 0 && (
-              <div className="shrink-0 p-3.5 bg-[#0B0E14] border-t border-[#262E3D] space-y-2.5">
-                <div className="space-y-1 text-xs">
-                  {cartSummary.discountUsd > 0 && (
-                    <div className="flex justify-between text-emerald-400 text-[11px] font-medium">
-                      <span>ការបញ្ចុះតម្លៃសរុប (Discount)</span>
-                      <span className="tabular-nums">-{formatUsd(cartSummary.discountUsd)}</span>
-                    </div>
-                  )}
-                  <div className="flex items-baseline justify-between">
-                    <span className="text-xs font-bold text-slate-300">តម្លៃសរុបត្រូវបង់៖</span>
-                    <div className="text-right">
-                      <span className="text-base font-black text-[#FACC15] tabular-nums">
-                        {formatUsd(cartSummary.totalUsd)}
-                      </span>
-                      <span className="text-xs font-bold text-slate-400 tabular-nums ml-2">
-                        ({formatKhr(cartSummary.totalKhr, true)})
-                      </span>
+              <>
+                <div className="rgb-line shrink-0" />
+                <div className="shrink-0 p-3.5 bg-[#0B0E14] space-y-2.5">
+                  <div className="space-y-1 text-xs">
+                    {cartSummary.discountUsd > 0 && (
+                      <div className="flex justify-between text-emerald-400 text-[11px] font-medium">
+                        <span>ការបញ្ចុះតម្លៃសរុប (Discount)</span>
+                        <span className="tabular-nums">-{formatUsd(cartSummary.discountUsd)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-xs font-bold text-slate-300">តម្លៃសរុបត្រូវបង់៖</span>
+                      <div className="text-right">
+                        <span className="text-base font-black text-[#FACC15] tabular-nums">
+                          {formatUsd(cartSummary.totalUsd)}
+                        </span>
+                        <span className="text-xs font-bold text-slate-400 tabular-nums ml-2">
+                          ({formatKhr(cartSummary.totalKhr, true)})
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Multi-Bank Selector (ABA, ACLEDA, Wing, Bakong KHQR) */}
-                <div className="space-y-1">
-                  <div className="text-[10px] font-bold text-slate-400 flex items-center justify-between">
-                    <span>ជ្រើសរើសធនាគារទូទាត់ប្រាក់៖</span>
-                    <span className="text-[#FACC15]">
-                      {
-                        CAMBODIA_BANK_OPTIONS.find((b) => b.code === selectedCheckoutBank)
-                          ?.nameKh
-                      }
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {CAMBODIA_BANK_OPTIONS.map((bank) => {
-                      const isSelected = selectedCheckoutBank === bank.code;
-                      return (
-                        <button
-                          key={bank.code}
-                          type="button"
-                          onClick={() => setSelectedCheckoutBank(bank.code)}
-                          className={`py-1.5 px-1 rounded-lg border text-[10px] font-black transition-all flex flex-col items-center justify-center gap-0.5 ${
-                            isSelected
-                              ? 'bg-[#FACC15] text-[#0B0E14] border-[#FACC15] shadow-xs'
-                              : 'bg-[#131722] text-slate-300 border-[#262E3D] hover:border-slate-500'
-                          }`}
-                        >
-                          <span className="leading-none">{bank.shortName}</span>
-                          <span
-                            className={`text-[8px] font-bold leading-none ${
-                              isSelected ? 'text-[#002B5C]' : 'text-slate-400'
+                  {/* Multi-Bank Selector (ABA, ACLEDA, Wing, Bakong KHQR) */}
+                  <div className="space-y-1">
+                    <div className="text-[10px] font-bold text-slate-400 flex items-center justify-between">
+                      <span>ជ្រើសរើសធនាគារទូទាត់ប្រាក់៖</span>
+                      <span className="rgb-text font-extrabold">
+                        {
+                          CAMBODIA_BANK_OPTIONS.find((b) => b.code === selectedCheckoutBank)
+                            ?.nameKh
+                        }
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                      {CAMBODIA_BANK_OPTIONS.map((bank) => {
+                        const isSelected = selectedCheckoutBank === bank.code;
+                        return (
+                          <button
+                            key={bank.code}
+                            type="button"
+                            onClick={() => setSelectedCheckoutBank(bank.code)}
+                            className={`py-1.5 px-1 rounded-lg text-[10px] font-black transition-all flex flex-col items-center justify-center gap-0.5 ${
+                              isSelected
+                                ? 'bg-[#FACC15] text-[#0B0E14] shadow-xs'
+                                : 'rgb-pill text-slate-200'
                             }`}
                           >
-                            {bank.code === 'ABA'
-                              ? 'ABA Pay'
-                              : bank.code === 'ACLEDA'
-                              ? 'អេស៊ីលីដា'
-                              : bank.code === 'WING'
-                              ? 'វីង'
-                              : 'គ្រប់ធនាគារ'}
-                          </span>
-                        </button>
-                      );
-                    })}
+                            <span className="leading-none">{bank.shortName}</span>
+                            <span
+                              className={`text-[8px] font-bold leading-none ${
+                                isSelected ? 'text-[#002B5C]' : 'text-slate-400'
+                              }`}
+                            >
+                              {bank.code === 'ABA'
+                                ? 'ABA Pay'
+                                : bank.code === 'ACLEDA'
+                                ? 'អេស៊ីលីដា'
+                                : bank.code === 'WING'
+                                ? 'វីង'
+                                : 'គ្រប់ធនាគារ'}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {/* Button 1: One-Tap Direct Alert into Selected Bank App with Pre-Set Amount */}
+                    <button
+                      type="button"
+                      disabled={submittingOrder}
+                      onClick={() => handleInitiateKhqrPayment(undefined, true)}
+                      className="w-full py-2.5 px-3 text-xs font-black text-[#0B0E14] bg-gradient-to-r from-[#FACC15] via-[#FDE047] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-2 shadow-md"
+                    >
+                      <span className="px-1.5 py-0.5 rounded bg-[#002B5C] text-white text-[10px] font-black tracking-tight shrink-0">
+                        {selectedCheckoutBank}
+                      </span>
+                      <Smartphone className="w-3.5 h-3.5 text-[#0B0E14] shrink-0" />
+                      <span className="truncate">
+                        {submittingOrder
+                          ? `កំពុងភ្ជាប់ទៅ ${selectedCheckoutBank}...`
+                          : `ចុចបើក ${selectedCheckoutBank} ទូទាត់ភ្លាម (${formatDisplayPrice(
+                              cartSummary.totalUsd
+                            )})`}
+                      </span>
+                    </button>
+
+                    {/* Button 2: Show KHQR Code for Scanning with Selected Bank */}
+                    <button
+                      type="submit"
+                      form="checkout-form"
+                      disabled={submittingOrder}
+                      className="w-full py-2 px-3 text-xs font-extrabold text-white rgb-pill rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-sm"
+                    >
+                      <QrCode className="w-3.5 h-3.5 text-[#FACC15] shrink-0" />
+                      <span className="truncate">
+                        បង្ហាញកូដ {selectedCheckoutBank} KHQR សម្រាប់ស្កេន (
+                        {formatDisplayPrice(cartSummary.totalUsd)})
+                      </span>
+                    </button>
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 gap-1.5">
-                  {/* Button 1: One-Tap Direct Alert into Selected Bank App with Pre-Set Amount */}
-                  <button
-                    type="button"
-                    disabled={submittingOrder}
-                    onClick={() => handleInitiateKhqrPayment(undefined, true)}
-                    className="w-full py-2.5 px-3 text-xs font-black text-[#0B0E14] bg-gradient-to-r from-[#FACC15] via-[#FDE047] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-2 shadow-md"
-                  >
-                    <span className="px-1.5 py-0.5 rounded bg-[#002B5C] text-white text-[10px] font-black tracking-tight shrink-0">
-                      {selectedCheckoutBank}
-                    </span>
-                    <Smartphone className="w-3.5 h-3.5 text-[#0B0E14] shrink-0" />
-                    <span className="truncate">
-                      {submittingOrder
-                        ? `កំពុងភ្ជាប់ទៅ ${selectedCheckoutBank}...`
-                        : `ចុចបើក ${selectedCheckoutBank} ទូទាត់ភ្លាម (${formatDisplayPrice(
-                            cartSummary.totalUsd
-                          )})`}
-                    </span>
-                  </button>
-
-                  {/* Button 2: Show KHQR Code for Scanning with Selected Bank */}
-                  <button
-                    type="submit"
-                    form="checkout-form"
-                    disabled={submittingOrder}
-                    className="w-full py-2 px-3 text-xs font-extrabold text-white bg-gradient-to-r from-[#003D6B] via-[#004F8B] to-[#002B4D] border border-[#0066B2] rounded-xl hover:brightness-110 transition-all flex items-center justify-center gap-2 shadow-sm"
-                  >
-                    <QrCode className="w-3.5 h-3.5 text-[#FACC15] shrink-0" />
-                    <span className="truncate">
-                      បង្ហាញកូដ {selectedCheckoutBank} KHQR សម្រាប់ស្កេន (
-                      {formatDisplayPrice(cartSummary.totalUsd)})
-                    </span>
-                  </button>
-                </div>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -1949,18 +2109,31 @@ export default function App() {
       )}
 
       {/* =====================================================================
-          OFFICIAL TAX / POS INVOICE PRINT & PDF MODAL
+          OFFICIAL TAX / POS INVOICE PRINT & PDF MODAL (ADMIN ONLY)
          ===================================================================== */}
-      <InvoiceModal invoice={selectedInvoice} onClose={() => setSelectedInvoice(null)} />
+      <InvoiceModal
+        invoice={adminJwtToken ? selectedInvoice : null}
+        onClose={() => setSelectedInvoice(null)}
+      />
 
       {/* =====================================================================
-          QUIET DARK FOOTER
+          RGB NEON FOOTER (រំដួលកាហ្វេ · ROMDOUL CAFFEE)
          ===================================================================== */}
-      <footer className="mt-16 border-t border-[#1E2532] bg-[#090C11] py-8 px-6 lg:px-12">
-        <div className="max-w-[1440px] mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
-          <div>
-            <span className="font-bold text-[#FACC15]">វំយោលកាហ្វេ (VOMYOL COFFEE)</span> ·
-            ប្រព័ន្ធគ្រប់គ្រងហាងកាហ្វេ និងលក់តាមអនឡាញ
+      <footer className="mt-16 bg-[#090C11]">
+        <div className="rgb-line" />
+        <div className="max-w-[1440px] mx-auto py-8 px-6 lg:px-12 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+          <div className="flex items-center gap-3">
+            <div className="rgb-logo-ring rounded-full shrink-0">
+              <ProductImage
+                src={ROMDOUL_LOGO_URL}
+                alt="Romdoul Caffee Logo"
+                className="w-9 h-9 rounded-full object-cover bg-[#0B0E14]"
+              />
+            </div>
+            <div>
+              <span className="font-extrabold rgb-text">រំដួលកាហ្វេ (ROMDOUL CAFFEE)</span> ·
+              ប្រព័ន្ធគ្រប់គ្រងហាងកាហ្វេ និងលក់តាមអនឡាញ
+            </div>
           </div>
           <div className="flex items-center gap-6">
             <button onClick={() => setActiveView('storefront')} className="hover:text-[#FACC15]">
@@ -1969,14 +2142,17 @@ export default function App() {
             <button onClick={() => setActiveView('orders')} className="hover:text-[#FACC15]">
               ការកម្មង់ខ្ញុំ
             </button>
-            <button onClick={() => setActiveView('invoices')} className="hover:text-[#FACC15]">
-              វិក្កយបត្រ
-            </button>
+            {adminJwtToken && (
+              <button onClick={() => setActiveView('invoices')} className="hover:text-[#FACC15]">
+                ព្រីនបុង (Admin)
+              </button>
+            )}
             <button onClick={() => setActiveView('admin')} className="hover:text-[#FACC15]">
               Admin
             </button>
           </div>
         </div>
+        <div className="rgb-line" />
       </footer>
     </div>
   );

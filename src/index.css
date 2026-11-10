@@ -1,15 +1,62 @@
 @import "tailwindcss";
 
+@keyframes rgb-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes rgb-glow-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 12px rgba(255, 0, 85, 0.28),
+      0 0 22px rgba(250, 204, 21, 0.22),
+      0 0 32px rgba(0, 212, 255, 0.2);
+  }
+  33% {
+    box-shadow:
+      0 0 12px rgba(0, 255, 136, 0.3),
+      0 0 22px rgba(0, 212, 255, 0.25),
+      0 0 32px rgba(168, 85, 247, 0.22);
+  }
+  66% {
+    box-shadow:
+      0 0 12px rgba(250, 204, 21, 0.32),
+      0 0 22px rgba(168, 85, 247, 0.26),
+      0 0 32px rgba(255, 0, 85, 0.22);
+  }
+}
+
 @layer base {
   :root {
     --font-sans: 'Kantumruy Pro', system-ui, -apple-system, sans-serif;
     --font-display: 'Kantumruy Pro', 'Cormorant Garamond', sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    --rgb-gradient: linear-gradient(
+      90deg,
+      #ff0055,
+      #ff7a00,
+      #facc15,
+      #00ff88,
+      #00d4ff,
+      #a855f7,
+      #ff0055
+    );
   }
 
   body {
     font-family: var(--font-sans);
-    background-color: #0B0E14;
+    background-color: #080B10;
+    background-image:
+      radial-gradient(circle at 12% 10%, rgba(255, 0, 85, 0.08), transparent 32%),
+      radial-gradient(circle at 88% 15%, rgba(0, 212, 255, 0.08), transparent 32%),
+      radial-gradient(circle at 50% 85%, rgba(0, 255, 136, 0.06), transparent 38%);
     color: #F3F4F6;
     line-height: 1.65;
   }
@@ -26,6 +73,84 @@
     font-variant-numeric: tabular-nums;
     font-family: var(--font-mono);
   }
+}
+
+/* ============================================================================
+   ROMDOUL CAFFEE — FULL-SPECTRUM RGB LIGHTING UTILITIES
+   ============================================================================ */
+.rgb-line {
+  background: var(--rgb-gradient);
+  background-size: 300% 300%;
+  animation: rgb-flow 4s linear infinite;
+  box-shadow:
+    0 0 10px rgba(255, 0, 85, 0.45),
+    0 0 18px rgba(0, 212, 255, 0.35);
+}
+
+.rgb-frame {
+  background: var(--rgb-gradient);
+  background-size: 300% 300%;
+  animation: rgb-flow 4.5s linear infinite, rgb-glow-pulse 5s ease-in-out infinite;
+}
+
+.rgb-card {
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(#121620, #121620) padding-box,
+    var(--rgb-gradient) border-box;
+  background-size: 100% 100%, 300% 300%;
+  animation: rgb-flow 5s linear infinite, rgb-glow-pulse 6s ease-in-out infinite;
+}
+
+.rgb-card-dark {
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(#0B0E14, #0B0E14) padding-box,
+    var(--rgb-gradient) border-box;
+  background-size: 100% 100%, 300% 300%;
+  animation: rgb-flow 5s linear infinite, rgb-glow-pulse 6s ease-in-out infinite;
+}
+
+.rgb-modal {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(#131722, #131722) padding-box,
+    var(--rgb-gradient) border-box;
+  background-size: 100% 100%, 300% 300%;
+  animation: rgb-flow 4s linear infinite, rgb-glow-pulse 4.5s ease-in-out infinite;
+}
+
+.rgb-pill {
+  border: 1.5px solid transparent;
+  background:
+    linear-gradient(#131824, #131824) padding-box,
+    var(--rgb-gradient) border-box;
+  background-size: 100% 100%, 300% 300%;
+  animation: rgb-flow 4s linear infinite;
+}
+
+.rgb-logo-ring {
+  padding: 2.5px;
+  border-radius: 9999px;
+  background: var(--rgb-gradient);
+  background-size: 300% 300%;
+  animation: rgb-flow 3s linear infinite, rgb-glow-pulse 3.5s ease-in-out infinite;
+}
+
+.rgb-text {
+  background: linear-gradient(
+    90deg,
+    #facc15,
+    #ff5599,
+    #00ff88,
+    #00d4ff,
+    #facc15
+  );
+  background-size: 250% auto;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: rgb-flow 5s linear infinite;
 }
 
 @media print {

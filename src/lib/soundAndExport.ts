@@ -98,7 +98,7 @@ export function exportOrdersToExcelCsv(orders: Order[]): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Vomyol-Coffee-Sales-Report-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `Romdoul-Caffee-Sales-Report-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -138,7 +138,7 @@ export function exportExpensesToExcelCsv(expenses: ExpenseRecord[]): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Vomyol-Coffee-Expenses-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `Romdoul-Caffee-Expenses-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
@@ -161,7 +161,7 @@ export function downloadShiftClosingReportHtml(params: {
 <html lang="km">
 <head>
 <meta charset="UTF-8" />
-<title>របាយការណ៍បិទបញ្ជីប្រចាំថ្ងៃ - វំយោលកាហ្វេ (${params.dateStr})</title>
+<title>របាយការណ៍បិទបញ្ជីប្រចាំថ្ងៃ - រំដួលកាហ្វេ (${params.dateStr})</title>
 <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:wght@400;600;700&display=swap" rel="stylesheet" />
 <style>
   body { font-family: 'Kantumruy Pro', sans-serif; max-width: 520px; margin: 24px auto; padding: 28px; border: 1px solid #cbd5e1; color: #0f172a; }
@@ -172,7 +172,7 @@ export function downloadShiftClosingReportHtml(params: {
 </style>
 </head>
 <body>
-  <h1>វំយោលកាហ្វេ (VOMYOL COFFEE)</h1>
+  <h1>រំដួលកាហ្វេ (ROMDOUL CAFFEE)</h1>
   <div class="sub">
     <div><strong>របាយការណ៍បិទបញ្ជីប្រចាំថ្ងៃ (Shift Closing Report)</strong></div>
     <div>កាលបរិច្ឆេទ៖ ${params.dateStr} · អ្នកគ្រប់គ្រង៖ ${params.adminName}</div>
@@ -190,7 +190,7 @@ export function downloadShiftClosingReportHtml(params: {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `Vomyol-Shift-Closing-${params.dateStr}.html`;
+  a.download = `Romdoul-Caffee-Shift-Closing-${params.dateStr}.html`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

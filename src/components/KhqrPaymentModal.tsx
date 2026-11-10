@@ -479,11 +479,11 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
         }
       }
       setErrorMsg(
-        `មិនទាន់ឃើញប្រតិបត្តិការនៅឡើយទេ។ សូមចុចប៊ូតុងពណ៌មាសខាងក្រោម ប្រសិនបើអ្នកបានបង់ប្រាក់តាម ${activeBankInfo.shortName} រួច។`
+        `មិនទាន់ឃើញប្រតិបត្តិការនៅឡើយទេ។ សូមចុចប៊ូតុងពណ៌មាសខាងក្រោម ប្រសិនបើអ្នកបានបង់ប្រាក់តាម ${activeBankInfo.shortName} រួចរាល់។`
       );
     } catch {
       setErrorMsg(
-        `សូមចុចប៊ូតុងពណ៌មាសខាងក្រោម ដើម្បីបញ្ជាក់ថាបានបង់ប្រាក់តាម ${activeBankInfo.shortName} រួចរាល់ និងចេញវិក្កយបត្រ។`
+        `សូមចុចប៊ូតុងពណ៌មាសខាងក្រោម ដើម្បីបញ្ជាក់ថាបានបង់ប្រាក់តាម ${activeBankInfo.shortName} រួចរាល់។`
       );
     } finally {
       setChecking(false);
@@ -510,11 +510,11 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-xs p-2 sm:p-4">
-      {/* Compact, Mobile-First Container that NEVER overflows viewport height */}
-      <div className="bg-[#131722] text-white w-full max-w-[395px] max-h-[94dvh] rounded-2xl border border-[#2A3241] shadow-2xl flex flex-col overflow-hidden">
+      {/* Compact, Mobile-First Container with Full RGB Lighting */}
+      <div className="rgb-modal text-white w-full max-w-[395px] max-h-[94dvh] rounded-2xl flex flex-col overflow-hidden">
         {/* 1. COMPACT STICKY HEADER (Dynamic Bank Theme: ABA, ACLEDA, Wing, Bakong) */}
         <div
-          className={`shrink-0 bg-gradient-to-r ${activeBankInfo.headerGradient} border-b-2 ${activeBankInfo.accentBorder} text-white px-3.5 py-2.5 flex items-center justify-between transition-all`}
+          className={`shrink-0 bg-gradient-to-r ${activeBankInfo.headerGradient} text-white px-3.5 py-2.5 flex items-center justify-between transition-all`}
         >
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="px-2 py-0.5 rounded-md bg-white text-[#002B5C] font-black text-xs tracking-tight flex items-center gap-0.5 shadow-xs shrink-0">
@@ -524,7 +524,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             </div>
             <div className="min-w-0">
               <div className="text-xs font-extrabold tracking-wide text-white truncate">
-                {activeBankInfo.nameKh}
+                {activeBankInfo.nameKh} · រំដួលកាហ្វេ
               </div>
               <div className="text-[10px] text-sky-200 truncate">
                 គណនីទទួលប្រាក់៖ {merchantName} · គិតលុយស្វ័យប្រវត្តិ ({formattedOrderAmount})
@@ -539,17 +539,18 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             <X className="w-4 h-4" />
           </button>
         </div>
+        <div className="rgb-line shrink-0" />
 
         {/* 2. SCROLLABLE COMPACT BODY */}
         <div className="flex-1 overflow-y-auto overscroll-contain px-3.5 py-2.5 space-y-2">
           {/* BANK SELECTOR TABS (ABA | ACLEDA | WING | BAKONG) */}
           {status === 'PENDING' && (
             <div className="space-y-1">
-              <div className="text-[10px] font-bold text-slate-400 flex items-center justify-between px-0.5">
+              <div className="text-[10px] font-bold text-slate-300 flex items-center justify-between px-0.5">
                 <span>ជ្រើសរើសធនាគារ (លោតចូល និងគិតលុយស្វ័យប្រវត្តិ)៖</span>
-                <span className="text-[#FACC15]">{activeBankInfo.shortName} PAY</span>
+                <span className="rgb-text font-black">{activeBankInfo.shortName} PAY</span>
               </div>
-              <div className="grid grid-cols-4 gap-1 bg-[#0B0E14] p-1 rounded-xl border border-[#222938]">
+              <div className="grid grid-cols-4 gap-1 rgb-card-dark p-1 rounded-xl">
                 {CAMBODIA_BANK_OPTIONS.map((bank) => {
                   const isSelected = selectedBank === bank.code;
                   return (
@@ -590,84 +591,86 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
 
           {/* ONE-TAP AUTO-LAUNCH & AUTO-CALCULATE BANNER FOR SELECTED BANK (ABA / ACLEDA / WING / BAKONG) */}
           {status === 'PENDING' && (
-            <div
-              className={`p-2.5 rounded-xl bg-gradient-to-br ${activeBankInfo.headerGradient} border-2 border-[#FACC15] shadow-md space-y-2`}
-            >
-              {/* Primary Big Golden Auto-Pay Button (Identical Experience for ACLEDA & ABA) */}
-              <button
-                type="button"
-                onClick={() => handleOpenSelectedBankApp(isAndroidDevice, selectedBank)}
-                className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#FACC15] via-[#FDE047] to-[#F59E0B] text-[#0B0E14] font-black text-xs flex items-center justify-between gap-2 shadow-md hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer"
+            <div className="rgb-frame rounded-xl p-[2px]">
+              <div
+                className={`p-2.5 rounded-[10px] bg-gradient-to-br ${activeBankInfo.headerGradient} space-y-2`}
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span
-                    className={`px-2 py-1 rounded-lg ${activeBankInfo.badgeBg} ${activeBankInfo.badgeText} text-[10px] font-black tracking-tight shrink-0`}
-                  >
-                    {activeBankInfo.shortName}
-                  </span>
-                  <div className="text-left min-w-0">
-                    <div className="leading-tight truncate">
-                      ចុចបើក {activeBankInfo.shortName} ទូទាត់ស្វ័យប្រវត្តិ
-                    </div>
-                    <div className="text-[9px] font-bold text-[#002B5C] leading-tight truncate">
-                      លោតចូលកម្មវិធី {activeBankInfo.shortName} · គិតលុយស្រេច ({formattedOrderAmount})
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0 bg-[#0B0E14] text-[#FACC15] px-2.5 py-1 rounded-lg font-black text-xs tabular-nums">
-                  <span>{formattedOrderAmount}</span>
-                  <ExternalLink className="w-3 h-3" />
-                </div>
-              </button>
-
-              {/* Android & iPhone Direct Launch Buttons */}
-              <div className="grid grid-cols-2 gap-1.5">
+                {/* Primary Big Golden Auto-Pay Button (Identical Experience for ACLEDA & ABA) */}
                 <button
                   type="button"
-                  onClick={() => handleOpenSelectedBankApp(true, selectedBank)}
-                  className="py-1.5 px-2 rounded-lg bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-[#FACC15]/50 text-[#FACC15] font-extrabold text-[10px] flex items-center justify-center gap-1 transition-all"
+                  onClick={() => handleOpenSelectedBankApp(isAndroidDevice, selectedBank)}
+                  className="w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#FACC15] via-[#FDE047] to-[#F59E0B] text-[#0B0E14] font-black text-xs flex items-center justify-between gap-2 shadow-md hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer"
                 >
-                  <Smartphone className="w-3 h-3 shrink-0" />
-                  <span className="truncate">បើក {activeBankInfo.shortName} (Android)</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleOpenSelectedBankApp(false, selectedBank)}
-                  className="py-1.5 px-2 rounded-lg bg-white text-[#002B5C] font-extrabold text-[10px] flex items-center justify-center gap-1 hover:bg-slate-100 transition-all"
-                >
-                  <Smartphone className="w-3 h-3 text-[#E1232E] shrink-0" />
-                  <span className="truncate">បើក {activeBankInfo.shortName} (iPhone)</span>
-                </button>
-              </div>
-
-              {/* Automatic Settlement Progress Bar when launched */}
-              {autoSettleCountdown !== null && (
-                <div className="p-2 rounded-lg bg-emerald-950/95 border border-emerald-400/70 text-[10px] text-emerald-100 space-y-1.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-extrabold text-[#FACC15] flex items-center gap-1">
-                      <RefreshCw className="w-3 h-3 animate-spin text-[#FACC15] shrink-0" />
-                      <span>
-                        កំពុងភ្ជាប់ និងគិតលុយស្វ័យប្រវត្តិ ({formattedOrderAmount}) ក្នុង{' '}
-                        {activeBankInfo.shortName}... ({autoSettleCountdown}s)
-                      </span>
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setAutoSettleCountdown(null)}
-                      className="px-1.5 py-0.5 rounded bg-black/40 text-slate-300 hover:text-white text-[9px] font-bold shrink-0"
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span
+                      className={`px-2 py-1 rounded-lg ${activeBankInfo.badgeBg} ${activeBankInfo.badgeText} text-[10px] font-black tracking-tight shrink-0`}
                     >
-                      រង់ចាំសិន
-                    </button>
+                      {activeBankInfo.shortName}
+                    </span>
+                    <div className="text-left min-w-0">
+                      <div className="leading-tight truncate">
+                        ចុចបើក {activeBankInfo.shortName} ទូទាត់ស្វ័យប្រវត្តិ
+                      </div>
+                      <div className="text-[9px] font-bold text-[#002B5C] leading-tight truncate">
+                        លោតចូលកម្មវិធី {activeBankInfo.shortName} · គិតលុយស្រេច ({formattedOrderAmount})
+                      </div>
+                    </div>
                   </div>
+                  <div className="flex items-center gap-1 shrink-0 bg-[#0B0E14] text-[#FACC15] px-2.5 py-1 rounded-lg font-black text-xs tabular-nums">
+                    <span>{formattedOrderAmount}</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </div>
+                </button>
+
+                {/* Android & iPhone Direct Launch Buttons */}
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSelectedBankApp(true, selectedBank)}
+                    className="py-1.5 px-2 rounded-lg bg-[#0B0E14]/90 hover:bg-[#0B0E14] border border-[#FACC15]/50 text-[#FACC15] font-extrabold text-[10px] flex items-center justify-center gap-1 transition-all"
+                  >
+                    <Smartphone className="w-3 h-3 shrink-0" />
+                    <span className="truncate">បើក {activeBankInfo.shortName} (Android)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSelectedBankApp(false, selectedBank)}
+                    className="py-1.5 px-2 rounded-lg bg-white text-[#002B5C] font-extrabold text-[10px] flex items-center justify-center gap-1 hover:bg-slate-100 transition-all"
+                  >
+                    <Smartphone className="w-3 h-3 text-[#E1232E] shrink-0" />
+                    <span className="truncate">បើក {activeBankInfo.shortName} (iPhone)</span>
+                  </button>
                 </div>
-              )}
+
+                {/* Automatic Settlement Progress Bar when launched */}
+                {autoSettleCountdown !== null && (
+                  <div className="p-2 rounded-lg bg-emerald-950/95 border border-emerald-400/70 text-[10px] text-emerald-100 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-extrabold text-[#FACC15] flex items-center gap-1">
+                        <RefreshCw className="w-3 h-3 animate-spin text-[#FACC15] shrink-0" />
+                        <span>
+                          កំពុងភ្ជាប់ និងគិតលុយស្វ័យប្រវត្តិ ({formattedOrderAmount}) ក្នុង{' '}
+                          {activeBankInfo.shortName}... ({autoSettleCountdown}s)
+                        </span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAutoSettleCountdown(null)}
+                        className="px-1.5 py-0.5 rounded bg-black/40 text-slate-300 hover:text-white text-[9px] font-bold shrink-0"
+                      >
+                        រង់ចាំសិន
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
           {/* Compact Single-Row QR Mode Tabs */}
           {status === 'PENDING' && (
-            <div className="grid grid-cols-3 gap-1 bg-[#0B0E14] p-1 rounded-xl border border-[#222938]">
+            <div className="grid grid-cols-3 gap-1 rgb-card-dark p-1 rounded-xl">
               <button
                 type="button"
                 onClick={() => setQrMode('dynamic')}
@@ -709,56 +712,58 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             </div>
           )}
 
-          {/* Compact Authentic Universal NBC KHQR Card (Pre-filled with exact order amount for ACLEDA & ABA) */}
+          {/* Compact Authentic Universal NBC KHQR Card wrapped in RGB Frame */}
           {status === 'PENDING' && (
-            <div className="max-w-[225px] mx-auto rounded-xl overflow-hidden shadow-lg bg-white text-[#111827] border border-slate-200">
-              <div
-                className={`${
-                  selectedBank === 'ACLEDA' ? 'bg-[#002B5C]' : 'bg-[#E1232E]'
-                } text-white py-1 px-3 flex items-center justify-between`}
-              >
-                <span className="font-black tracking-[0.12em] text-[10px]">
-                  {activeBankInfo.shortName} · KHQR AUTO-PAY
-                </span>
-                <span className="text-[10px] font-bold tabular-nums flex items-center gap-1 bg-black/25 px-1.5 py-0.5 rounded">
-                  <Clock className="w-2.5 h-2.5" />
-                  {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-                </span>
-              </div>
+            <div className="max-w-[228px] mx-auto rgb-frame p-[2px] rounded-xl">
+              <div className="rounded-[10px] overflow-hidden bg-white text-[#111827]">
+                <div
+                  className={`${
+                    selectedBank === 'ACLEDA' ? 'bg-[#002B5C]' : 'bg-[#E1232E]'
+                  } text-white py-1 px-3 flex items-center justify-between`}
+                >
+                  <span className="font-black tracking-[0.12em] text-[10px]">
+                    {activeBankInfo.shortName} · KHQR AUTO-PAY
+                  </span>
+                  <span className="text-[10px] font-bold tabular-nums flex items-center gap-1 bg-black/25 px-1.5 py-0.5 rounded">
+                    <Clock className="w-2.5 h-2.5" />
+                    {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+                  </span>
+                </div>
 
-              <div className="px-3.5 py-1.5 flex items-baseline justify-between border-b border-dashed border-slate-300">
-                <div>
-                  <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-none">
-                    {merchantName}
+                <div className="px-3.5 py-1.5 flex items-baseline justify-between border-b border-dashed border-slate-300">
+                  <div>
+                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider leading-none">
+                      {merchantName}
+                    </div>
+                    <div className="text-lg font-black text-[#002B5C] tabular-nums leading-tight mt-0.5">
+                      {formattedOrderAmount}
+                    </div>
                   </div>
-                  <div className="text-lg font-black text-[#002B5C] tabular-nums leading-tight mt-0.5">
-                    {formattedOrderAmount}
+                  <div className="text-[11px] font-bold text-slate-500 tabular-nums">
+                    {secondaryOrderAmount}
                   </div>
                 </div>
-                <div className="text-[11px] font-bold text-slate-500 tabular-nums">
-                  {secondaryOrderAmount}
-                </div>
-              </div>
 
-              <div className="p-2 flex flex-col items-center bg-white">
-                <img
-                  src={displayedQrUrl}
-                  alt={`${activeBankInfo.shortName} KHQR Code for Order ${order.orderNumber}`}
-                  className="w-34 h-34 object-contain"
-                />
-                <div className="mt-1 flex items-center justify-center gap-1 flex-wrap">
-                  <span className="px-1.5 py-0.5 rounded bg-[#003D6B] text-white text-[8px] font-black">
-                    ABA
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-[#002B5C] text-[#FACC15] text-[8px] font-black">
-                    ACLEDA
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-[#3A8E2E] text-white text-[8px] font-black">
-                    WING
-                  </span>
-                  <span className="px-1.5 py-0.5 rounded bg-[#E1232E] text-white text-[8px] font-black">
-                    KHQR
-                  </span>
+                <div className="p-2 flex flex-col items-center bg-white">
+                  <img
+                    src={displayedQrUrl}
+                    alt={`${activeBankInfo.shortName} KHQR Code for Order ${order.orderNumber}`}
+                    className="w-34 h-34 object-contain"
+                  />
+                  <div className="mt-1 flex items-center justify-center gap-1 flex-wrap">
+                    <span className="px-1.5 py-0.5 rounded bg-[#003D6B] text-white text-[8px] font-black">
+                      ABA
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-[#002B5C] text-[#FACC15] text-[8px] font-black">
+                      ACLEDA
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-[#3A8E2E] text-white text-[8px] font-black">
+                      WING
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-[#E1232E] text-white text-[8px] font-black">
+                      KHQR
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -770,7 +775,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleSaveOrSharePreFilledQr('share')}
-                className="py-1.5 px-2 rounded-lg bg-[#0B0E14] hover:bg-[#161C28] border border-[#2A3241] text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
+                className="rgb-pill py-1.5 px-2 rounded-lg text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
               >
                 <Share2 className="w-3 h-3 text-[#FACC15] shrink-0" />
                 <span className="truncate">
@@ -780,7 +785,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
               <button
                 type="button"
                 onClick={() => handleSaveOrSharePreFilledQr('download')}
-                className="py-1.5 px-2 rounded-lg bg-[#0B0E14] hover:bg-[#161C28] border border-[#2A3241] text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
+                className="rgb-pill py-1.5 px-2 rounded-lg text-[10px] font-bold text-sky-200 flex items-center justify-center gap-1 transition-colors"
               >
                 <Download className="w-3 h-3 text-[#FACC15] shrink-0" />
                 <span className="truncate">ទាញយក QR ({formattedOrderAmount})</span>
@@ -788,8 +793,8 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
             </div>
           )}
 
-          {/* Compact Single-Line Account Numbers Box */}
-          <div className="border border-[#2A3241] rounded-xl p-2 bg-[#0B0E14] space-y-1.5">
+          {/* Compact Single-Line Account Numbers Box with RGB border */}
+          <div className="rgb-card-dark rounded-xl p-2 space-y-1.5">
             <div className="flex items-center justify-between text-[10px] border-b border-[#1E2532] pb-1">
               <span className="text-slate-400">
                 គណនីទទួលប្រាក់ ({activeBankInfo.shortName} / KHQR):
@@ -874,7 +879,7 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
           )}
 
           {status !== 'PENDING' && (
-            <div className="p-2.5 rounded-xl bg-[#0B0E14] border border-[#2A3241] flex items-center justify-center gap-2 text-xs font-bold">
+            <div className="p-2.5 rounded-xl rgb-card-dark flex items-center justify-center gap-2 text-xs font-bold">
               {status === 'PAID' ? (
                 <>
                   <CheckCircle2 className="w-4 h-4 text-emerald-400" />
@@ -894,38 +899,41 @@ export const KhqrPaymentModal: React.FC<KhqrPaymentModalProps> = ({
 
         {/* 3. STICKY BOTTOM ACTION FOOTER (Always reachable on mobile screens) */}
         {status === 'PENDING' && (
-          <div className="shrink-0 px-3.5 py-2.5 bg-[#0B0E14] border-t border-[#262E3D] space-y-1.5">
-            <button
-              onClick={() => handleCompletePaymentVerification(selectedBank)}
-              disabled={simulating}
-              className="w-full py-2.5 px-3 text-xs font-extrabold text-[#0B0E14] bg-gradient-to-r from-[#FACC15] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-1.5 shadow-md"
-            >
-              <CheckCircle2 className="w-4 h-4 text-[#0B0E14] shrink-0" />
-              <span className="truncate">
-                {simulating
-                  ? `កំពុងគិតលុយ និងចេញវិក្កយបត្រ ${activeBankInfo.shortName}...`
-                  : `បញ្ជាក់បង់ប្រាក់ ${activeBankInfo.shortName} (${formattedOrderAmount}) · ចេញវិក្កយបត្រ`}
-              </span>
-            </button>
-
-            <div className="grid grid-cols-2 gap-1.5">
+          <>
+            <div className="rgb-line shrink-0" />
+            <div className="shrink-0 px-3.5 py-2.5 bg-[#0B0E14] space-y-1.5">
               <button
-                onClick={handleManualCheck}
-                disabled={checking}
-                className="py-1.5 px-2.5 text-[11px] font-bold text-sky-200 bg-[#131C2E] border border-sky-500/30 rounded-lg hover:brightness-110 transition-all flex items-center justify-center gap-1"
+                onClick={() => handleCompletePaymentVerification(selectedBank)}
+                disabled={simulating}
+                className="w-full py-2.5 px-3 text-xs font-extrabold text-[#0B0E14] bg-gradient-to-r from-[#FACC15] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-1.5 shadow-md"
               >
-                <RefreshCw className={`w-3 h-3 ${checking ? 'animate-spin' : ''}`} />
-                <span className="truncate">ពិនិត្យការបង់ប្រាក់</span>
+                <CheckCircle2 className="w-4 h-4 text-[#0B0E14] shrink-0" />
+                <span className="truncate">
+                  {simulating
+                    ? `កំពុងបញ្ជាក់ការបង់ប្រាក់តាម ${activeBankInfo.shortName}...`
+                    : `បញ្ជាក់ថាបានបង់ប្រាក់ ${activeBankInfo.shortName} (${formattedOrderAmount}) រួចរាល់`}
+                </span>
               </button>
 
-              <button
-                onClick={handleCancel}
-                className="py-1.5 px-2.5 text-[11px] font-bold text-red-400 bg-red-950/25 border border-red-500/25 hover:bg-red-950/40 rounded-lg transition-colors truncate"
-              >
-                បោះបង់ (Cancel)
-              </button>
+              <div className="grid grid-cols-2 gap-1.5">
+                <button
+                  onClick={handleManualCheck}
+                  disabled={checking}
+                  className="rgb-pill py-1.5 px-2.5 text-[11px] font-bold text-sky-200 rounded-lg hover:brightness-110 transition-all flex items-center justify-center gap-1"
+                >
+                  <RefreshCw className={`w-3 h-3 ${checking ? 'animate-spin' : ''}`} />
+                  <span className="truncate">ពិនិត្យការបង់ប្រាក់</span>
+                </button>
+
+                <button
+                  onClick={handleCancel}
+                  className="py-1.5 px-2.5 text-[11px] font-bold text-red-400 bg-red-950/25 border border-red-500/25 hover:bg-red-950/40 rounded-lg transition-colors truncate"
+                >
+                  បោះបង់ (Cancel)
+                </button>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </div>
     </div>

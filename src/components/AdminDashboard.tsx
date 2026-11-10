@@ -86,6 +86,8 @@ interface AdminDashboardProps {
   setSoundEnabled: (enabled: boolean) => void;
 }
 
+const ROMDOUL_LOGO_URL = '/src/assets/images/romdoul_caffee_logo_1794272922476.jpg';
+
 const PRESET_IMAGES = [
   {
     label: 'កាហ្វេទឹកដោះគោទឹកកក (Iced Latte)',
@@ -204,7 +206,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [abaCustomQrImage, setAbaCustomQrImage] = useState('');
 
   // Backup & Security State
-  const [backupLabel, setBackupLabel] = useState('Backup ប្រចាំថ្ងៃ - វំយោលកាហ្វេ');
+  const [backupLabel, setBackupLabel] = useState('Backup ប្រចាំថ្ងៃ - រំដួលកាហ្វេ (Romdoul Caffee)');
   const [backupLoading, setBackupLoading] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newUsername, setNewUsername] = useState('Udomst');
@@ -562,7 +564,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         tableOrType: 'ញ៉ាំក្នុងហាង · តុលេខ ០១',
         totalUsd: 5.5,
         totalKhr: 22550,
-        itemsText: '• កាហ្វេទឹកដោះគោទឹកកក វំយោលពិសេស (M, ស្ករ 75%) x2',
+        itemsText: '• កាហ្វេទឹកដោះគោទឹកកក រំដួលពិសេស (M, ស្ករ 75%) x2',
         bakongTransactionId: 'BKG-TEST-VERIFIED',
       }),
     });
@@ -766,7 +768,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleDownloadBackupJson = () => {
     const payload = {
-      store: 'វំយោលកាហ្វេ (Vomyol Coffee)',
+      store: 'រំដួលកាហ្វេ (Romdoul Caffee)',
       exportedAt: new Date().toISOString(),
       categories,
       menuItems,
@@ -782,7 +784,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `vomyol-coffee-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `romdoul-caffee-backup-${new Date().toISOString().slice(0, 10)}.json`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -840,13 +842,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   // ============================================================================
   if (!jwtToken) {
     return (
-      <div className="max-w-md mx-auto my-12 bg-[#131722] border border-[#2A3241] rounded-2xl p-8 shadow-2xl">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-xl bg-[#FACC15]/15 border border-[#FACC15]/50 text-[#FACC15] flex items-center justify-center">
-            <Lock className="w-5 h-5" />
+      <div className="max-w-md mx-auto my-12 rgb-modal rounded-2xl p-8">
+        <div className="flex items-center gap-3.5 mb-6">
+          <div className="rgb-logo-ring rounded-full shrink-0">
+            <ProductImage
+              src={ROMDOUL_LOGO_URL}
+              alt="Romdoul Caffee Logo"
+              className="w-12 h-12 rounded-full object-cover bg-[#0B0E14]"
+            />
           </div>
           <div>
-            <h2 className="text-xl font-bold text-[#FACC15]">ផ្ទាំងគ្រប់គ្រង Admin · វំយោលកាហ្វេ</h2>
+            <h2 className="text-xl font-bold rgb-text">ផ្ទាំងគ្រប់គ្រង Admin · រំដួលកាហ្វេ</h2>
             <p className="text-xs text-slate-400">
               សូមបញ្ចូលគណនី Admin ដើម្បីគ្រប់គ្រងមុខម្ហូប ការកម្មង់ និងរបាយការណ៍
             </p>
@@ -957,21 +963,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Top Admin Header & Sub-Navigation */}
-      <div className="bg-[#131722] border border-[#262E3D] rounded-2xl p-5 flex flex-col gap-4">
+      {/* Top Admin Header & Sub-Navigation with RGB Frame */}
+      <div className="rgb-card rounded-2xl p-5 flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-[#FACC15]">
-              ប្រព័ន្ធគ្រប់គ្រងហាង «វំយោលកាហ្វេ» (Admin Portal)
-            </h1>
-            <p className="text-xs text-slate-400 mt-1">
-              គណនីកំពុងប្រើប្រាស់៖{' '}
-              <span className="font-semibold text-white">{adminUser?.username}</span> · ការអ៊ិនគ្រីប៖{' '}
-              <span className="tabular-nums text-emerald-400">{adminUser?.passwordHashPreview}</span>
-            </p>
+          <div className="flex items-center gap-3.5">
+            <div className="rgb-logo-ring rounded-full shrink-0">
+              <ProductImage
+                src={ROMDOUL_LOGO_URL}
+                alt="Romdoul Caffee Logo"
+                className="w-12 h-12 rounded-full object-cover bg-[#0B0E14]"
+              />
+            </div>
+            <div>
+              <h1 className="text-xl sm:text-2xl font-bold rgb-text">
+                ប្រព័ន្ធគ្រប់គ្រងហាង «រំដួលកាហ្វេ (Romdoul Caffee)»
+              </h1>
+              <p className="text-xs text-slate-400 mt-1">
+                គណនីកំពុងប្រើប្រាស់៖{' '}
+                <span className="font-semibold text-white">{adminUser?.username}</span> · ការអ៊ិនគ្រីប៖{' '}
+                <span className="tabular-nums text-emerald-400">{adminUser?.passwordHashPreview}</span>
+              </p>
+            </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {invoices.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onSelectInvoice(invoices[0])}
+                className="px-3.5 py-2 text-xs font-extrabold text-[#0B0E14] bg-gradient-to-r from-[#FACC15] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all inline-flex items-center gap-1.5 shadow-sm"
+              >
+                <Printer className="w-3.5 h-3.5 text-[#0B0E14]" />
+                <span>ព្រីនបុងចុងក្រោយ ({invoices[0].invoiceNumber})</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
@@ -1000,7 +1026,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         </div>
 
         {/* Sub-Navigation Bar */}
-        <div className="flex flex-wrap items-center gap-1.5 p-1.5 bg-[#0B0E14] border border-[#222938] rounded-xl">
+        <div className="flex flex-wrap items-center gap-1.5 p-1.5 rgb-card-dark rounded-xl">
           <button
             onClick={() => setActiveTab('analytics')}
             className={`px-3.5 py-2 text-xs font-bold rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 ${
@@ -1074,8 +1100,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 : 'text-slate-300 hover:text-white'
             }`}
           >
-            <FileText className="w-3.5 h-3.5" />
-            <span>វិក្កយបត្រ ({invoices.length})</span>
+            <Printer className="w-3.5 h-3.5" />
+            <span>ព្រីនបុង & វិក្កយបត្រ ({invoices.length})</span>
           </button>
 
           <button
@@ -1125,7 +1151,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {activeTab === 'analytics' && (
         <div className="space-y-6">
           {/* Action bar for Excel Export & Shift Closing Report */}
-          <div className="bg-[#131722] border border-[#262E3D] rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="rgb-card rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-[#FACC15]">
                 របាយការណ៍ហិរញ្ញវត្ថុ និងការបិទបញ្ជីប្រចាំថ្ងៃ (Financial & Shift Closing)
@@ -1162,9 +1188,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
           </div>
 
-          {/* 5 KPI Summary Cards including Expenses & Net Profit */}
+          {/* 5 KPI Summary Cards with Animated RGB Borders */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div className="bg-[#131722] border border-[#262E3D] rounded-xl p-5">
+            <div className="rgb-card rounded-xl p-5">
               <div className="text-xs text-slate-400">ចំណូលលក់សរុបប្រចាំថ្ងៃនេះ</div>
               <div className="text-2xl font-extrabold text-[#FACC15] tabular-nums mt-1">
                 {formatUsd(analytics.dailyRevenueUsd)}
@@ -1174,7 +1200,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            <div className="bg-[#131722] border border-[#262E3D] rounded-xl p-5">
+            <div className="rgb-card rounded-xl p-5">
               <div className="text-xs text-slate-400">ចំណូលលក់សរុបរួម (Gross Revenue)</div>
               <div className="text-2xl font-extrabold text-emerald-400 tabular-nums mt-1">
                 {formatUsd(analytics.totalRevenueUsd)}
@@ -1184,7 +1210,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            <div className="bg-[#131722] border border-[#262E3D] rounded-xl p-5">
+            <div className="rgb-card rounded-xl p-5">
               <div className="text-xs text-slate-400">ចំណាយប្រតិបត្តិការសរុប (Expenses)</div>
               <div className="text-2xl font-extrabold text-rose-400 tabular-nums mt-1">
                 -{formatUsd(analytics.totalExpensesUsd)}
@@ -1194,7 +1220,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            <div className="bg-[#131722] border border-[#262E3D] rounded-xl p-5">
+            <div className="rgb-card rounded-xl p-5">
               <div className="text-xs text-slate-400">ប្រាក់ចំណេញសុទ្ធ (Net Profit)</div>
               <div
                 className={`text-2xl font-extrabold tabular-nums mt-1 ${
@@ -1208,7 +1234,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               </div>
             </div>
 
-            <div className="bg-[#131722] border border-[#262E3D] rounded-xl p-5">
+            <div className="rgb-card rounded-xl p-5">
               <div className="text-xs text-slate-400">សមាជិកសន្សំពិន្ទុ & ប្រូម៉ូសិន</div>
               <div className="text-2xl font-extrabold text-white tabular-nums mt-1">
                 {loyaltyMembers.length} នាក់
@@ -1221,7 +1247,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Sales Chart */}
-            <div className="lg:col-span-2 bg-[#131722] border border-[#262E3D] rounded-2xl p-6">
+            <div className="lg:col-span-2 rgb-card rounded-2xl p-6">
               <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
                 <div>
                   <h3 className="text-lg font-bold text-[#FACC15] flex items-center gap-2">
@@ -1299,7 +1325,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             </div>
 
             {/* Best Selling Menu Items */}
-            <div className="bg-[#131722] border border-[#262E3D] rounded-2xl p-6">
+            <div className="rgb-card rounded-2xl p-6">
               <h3 className="text-lg font-bold text-[#FACC15] mb-1">
                 មុខម្ហូបដែលលក់ដាច់ជាងគេ
               </h3>
@@ -1880,9 +1906,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                             {matchingInvoice && (
                               <button
                                 onClick={() => onSelectInvoice(matchingInvoice)}
-                                className="px-2.5 py-1.5 text-xs font-bold text-[#0B0E14] bg-[#FACC15] rounded-lg hover:brightness-105 transition-all"
+                                className="px-2.5 py-1.5 text-xs font-bold text-[#0B0E14] bg-[#FACC15] rounded-lg hover:brightness-105 transition-all inline-flex items-center gap-1"
                               >
-                                វិក្កយបត្រ
+                                <Printer className="w-3.5 h-3.5 text-[#0B0E14]" />
+                                <span>ព្រីនបុង</span>
                               </button>
                             )}
                           </div>
@@ -1936,7 +1963,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             {tableQrData && (
               <div className="bg-white text-[#0B0E14] rounded-2xl p-5 text-center space-y-3">
                 <div className="text-xs font-extrabold tracking-wider uppercase text-slate-500">
-                  វំយោលកាហ្វេ · VOMYOL COFFEE
+                  រំដួលកាហ្វេ · ROMDOUL CAFFEE
                 </div>
                 <div className="text-xl font-extrabold text-[#0B0E14]">
                   ស្កេនកម្មង់ភេសជ្ជៈ · តុលេខ {tableQrData.tableNumber}
@@ -1949,7 +1976,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                 <div className="text-[11px] text-slate-500 break-all">{tableQrData.targetUrl}</div>
                 <a
                   href={tableQrData.qrDataUrl}
-                  download={`Vomyol-Coffee-Table-${tableQrData.tableNumber}-QR.png`}
+                  download={`Romdoul-Caffee-Table-${tableQrData.tableNumber}-QR.png`}
                   className="inline-flex items-center justify-center gap-1.5 w-full py-2.5 px-4 text-xs font-extrabold bg-[#0B0E14] text-[#FACC15] rounded-xl"
                 >
                   <Download className="w-4 h-4" />
@@ -2523,8 +2550,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                           onClick={() => onSelectInvoice(inv)}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-[#0B0E14] bg-[#FACC15] rounded-lg hover:brightness-105 transition-all"
                         >
-                          <Eye className="w-3.5 h-3.5 text-[#0B0E14]" />
-                          <span>មើល / បោះពុម្ពឡើងវិញ</span>
+                          <Printer className="w-3.5 h-3.5 text-[#0B0E14]" />
+                          <span>ព្រីនបុង / បោះពុម្ពឡើងវិញ</span>
                         </button>
                       </td>
                     </tr>
