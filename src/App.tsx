@@ -25,6 +25,12 @@ import {
   Sparkles,
   Smartphone,
   Printer,
+  Heart,
+  Bell,
+  Wifi,
+  RotateCcw,
+  Banknote,
+  Copy,
 } from 'lucide-react';
 import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
 import {
@@ -63,6 +69,7 @@ import {
 import { ProductImage } from './components/ProductImage';
 import { KhqrPaymentModal } from './components/KhqrPaymentModal';
 import { InvoiceModal } from './components/InvoiceModal';
+import { CupStickerModal } from './components/CupStickerModal';
 import { DrinkCustomizationModal } from './components/DrinkCustomizationModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { playOrderNotificationSound } from './lib/soundAndExport';
@@ -162,6 +169,7 @@ export default function App() {
     liveTokenConfigured: boolean;
   } | null>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [stickerOrder, setStickerOrder] = useState<Order | null>(null);
   const [customerPaidNotification, setCustomerPaidNotification] = useState<{
     orderNumber: string;
     customerName: string;
@@ -170,6 +178,44 @@ export default function App() {
     totalKhr: number;
     paymentMethod: string;
   } | null>(null);
+
+  // Feature: Customer Favorite Drinks (❤️ Favorites)
+  const [favoriteItemIds, setFavoriteItemIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('romdoul_favorites');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const toggleFavoriteItem = (itemId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setFavoriteItemIds((prev) => {
+      const next = prev.includes(itemId)
+        ? prev.filter((id) => id !== itemId)
+        : [...prev, itemId];
+      try {
+        localStorage.setItem('romdoul_favorites', JSON.stringify(next));
+      } catch {
+        // Ignore storage errors
+      }
+      return next;
+    });
+  };
+
+  // Feature: Smart Table Service Call (ហៅបុគ្គលិកពីតុ) & Store Wi-Fi Info Modal
+  const [isServiceModalOpen, setIsServiceModalOpen] = useState<boolean>(false);
+  const [serviceTableNum, setServiceTableNum] = useState<string>('តុលេខ ០១');
+  const [serviceRequestType, setServiceRequestType] = useState<string>('សុំទឹកកកបន្ថែម (Extra Ice)');
+  const [serviceFeedback, setServiceFeedback] = useState<string>('');
+  const [wifiCopied, setWifiCopied] = useState<boolean>(false);
+  const [tableServiceCalls, setTableServiceCalls] = useState<
+    { id: string; table: string; request: string; time: string }[]
+  >([]);
+
+  // Feature: Admin POS Cash Checkout & Change Calculator
+  const [adminCashReceivedUsd, setAdminCashReceivedUsd] = useState<string>('');
 
   const seenInvoiceIdsRef = useRef<Set<string>>(new Set());
   const initialInvoicesLoadedRef = useRef<boolean>(false);
@@ -369,7 +415,9 @@ export default function App() {
   // Filtered storefront menu items
   const visibleMenuItems = useMemo(() => {
     return menuItems.filter((item) => {
-      if (selectedCategoryId !== 'ALL' && item.categoryId !== selectedCategoryId) {
+      if (selectedCategoryId === 'FAVORITES') {
+        if (!favoriteItemIds.includes(item.id)) return false;
+      } else if (selectedCategoryId !== 'ALL' && item.categoryId !== selectedCategoryId) {
         return false;
       }
       if (selectedCategoryId === 'ALL') {
@@ -391,7 +439,7 @@ export default function App() {
       }
       return true;
     });
-  }, [menuItems, selectedCategoryId, mainSectionTab, searchQuery]);
+  }, [menuItems, selectedCategoryId, mainSectionTab, searchQuery, favoriteItemIds]);
 
   // Customer Loyalty lookup by phone number
   const activeLoyaltyMember = useMemo(() => {
@@ -862,6 +910,212 @@ export default function App() {
     });
   };
 
+  // Feature: 1-Tap Re-Order from Past Orders
+  const handleQuickReorder = (order: Order) => {
+    try {
+      const lines: OrderLineItem[] = JSON.parse(order.itemsSummary);
+      const restoredCart: CartItem[] = [];
+      for (const l of lines) {
+        const foundItem = menuItems.find((m) => m.id === l.menuItemId);
+        if (foundItem && foundItem.isAvailable) {
+          restoredCart.push({
+            menuItem: foundItem,
+            quantity: l.quantity,
+            cupSize: l.cupSize || 'M',
+            sugarLevel: l.sugarLevel || '100%',
+            iceLevel: l.iceLevel || 'ទឹកកកធម្មតា',
+            toppings: l.toppings || [],
+            extraPriceUsd: l.extraPriceUsd || 0,
+          });
+        }
+      }
+      if (restoredCart.length > 0) {
+        setCart(restoredCart);
+        setIsCartOpen(true);
+      }
+    } catch {
+      // Ignore invalid JSON
+    }
+  };
+
+  // Feature: Smart Table Service Call submission
+  const handleSendTableServiceCall = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const targetTable = qrScannedTable ? `តុលេខ ${qrScannedTable}` : serviceTableNum;
+    const nowTime = new Date().toLocaleTimeString('km-KH', {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    const newCall = {
+      id: `call_${Date.now()}`,
+      table: targetTable,
+      request: serviceRequestType,
+      time: nowTime,
+    };
+    setTableServiceCalls((prev) => [newCall, ...prev]);
+    if (soundEnabled) {
+      playOrderNotificationSound();
+    }
+    try {
+      fetch('/api/notifications/telegram', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderNumber: 'CALL-WAITER',
+          invoiceNumber: targetTable,
+          customerName: 'អតិថិជនហៅបុគ្គលិកពីតុ',
+          tableOrType: targetTable,
+          totalUsd: 0,
+          totalKhr: 0,
+          itemsText: `🔔 សំណើពីអតិថិជន៖ ${serviceRequestType}`,
+          bakongTransactionId: `TABLE-CALL-${nowTime}`,
+        }),
+      }).catch(() => {});
+    } catch {
+      // Non-fatal
+    }
+    setServiceFeedback(`បានផ្ញើសំណើ «${serviceRequestType}» សម្រាប់ ${targetTable} ទៅកាន់បុគ្គលិករួចរាល់!`);
+    setTimeout(() => setServiceFeedback(''), 4000);
+  };
+
+  // Feature: Admin Instant Cash Checkout & Change Calculator
+  const handleAdminCashCheckout = async () => {
+    if (!adminJwtToken || cart.length === 0 || submittingOrder) return;
+    setSubmittingOrder(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const dateStamp = nowIso.slice(2, 10).replace(/-/g, '');
+      const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+      const orderNumber = `VMC-${dateStamp}-${randomSuffix}`;
+      const invoiceNumber = `INV-${dateStamp}-${randomSuffix}`;
+
+      const lineItems: OrderLineItem[] = cart.map((c) => {
+        const baseDiscounted = getDiscountedPrice(
+          c.menuItem.priceUsd,
+          c.menuItem.discountPercent
+        );
+        const discountedUnitPriceUsd = Number(
+          (baseDiscounted + (c.extraPriceUsd || 0)).toFixed(2)
+        );
+        return {
+          menuItemId: c.menuItem.id,
+          nameKh: c.menuItem.nameKh,
+          nameEn: c.menuItem.nameEn,
+          quantity: c.quantity,
+          unitPriceUsd: Number((c.menuItem.priceUsd + (c.extraPriceUsd || 0)).toFixed(2)),
+          discountPercent: c.menuItem.discountPercent,
+          discountedUnitPriceUsd,
+          lineTotalUsd: Number((discountedUnitPriceUsd * c.quantity).toFixed(2)),
+          cupSize: c.cupSize,
+          sugarLevel: c.sugarLevel,
+          iceLevel: c.iceLevel,
+          toppings: c.toppings,
+          extraPriceUsd: c.extraPriceUsd,
+        };
+      });
+
+      const cashGiven = parseFloat(adminCashReceivedUsd) || cartSummary.totalUsd;
+      const changeUsd = Math.max(0, Number((cashGiven - cartSummary.totalUsd).toFixed(2)));
+      const cashTxId = `CASH-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      const noteParts = [
+        orderNote.trim(),
+        `[សាច់ប្រាក់ទទួល: $${cashGiven.toFixed(2)} · អាប់: $${changeUsd.toFixed(2)}]`,
+        appliedPromo ? `[Promo: ${appliedPromo.code}]` : '',
+        redeemLoyaltyReward ? '[Loyalty -10 pts]' : '',
+      ].filter(Boolean);
+
+      const newOrder: Order = {
+        id: `ord_${Date.now()}_${randomSuffix}`,
+        orderNumber,
+        invoiceNumber,
+        customerName: customerName.trim() || 'អតិថិជនទូទៅ (Cash)',
+        customerPhone: customerPhone.trim(),
+        tableOrType: tableOrType.trim() || 'ញ៉ាំក្នុងហាង',
+        note: noteParts.join(' · '),
+        itemsSummary: JSON.stringify(lineItems),
+        totalItemsCount: cartSummary.totalItemsCount,
+        subtotalUsd: cartSummary.subtotalUsd,
+        discountUsd: cartSummary.discountUsd,
+        totalUsd: cartSummary.totalUsd,
+        totalKhr: cartSummary.totalKhr,
+        currency,
+        paymentMethod: 'ABA_KHQR',
+        paymentStatus: 'PAID',
+        orderStatus: 'PREPARING',
+        khqrMd5: cashTxId,
+        khqrString: 'CASH_POS_PAYMENT',
+        bakongTransactionId: cashTxId,
+        createdAt: nowIso,
+        paidAt: nowIso,
+      };
+
+      await createOrderInDb(newOrder);
+      await incrementMenuItemsSoldCount(
+        lineItems.map((l) => ({ menuItemId: l.menuItemId, quantity: l.quantity }))
+      );
+
+      if (appliedPromo) {
+        await incrementPromoCodeUsageInDb(appliedPromo.id);
+      }
+
+      if (newOrder.customerPhone && newOrder.customerPhone.trim().length >= 6) {
+        await upsertLoyaltyMemberInDb({
+          phone: newOrder.customerPhone,
+          customerName: newOrder.customerName,
+          pointsDelta: newOrder.totalItemsCount + (redeemLoyaltyReward ? -10 : 0),
+          spentUsdDelta: newOrder.totalUsd,
+        });
+      }
+
+      const generatedInvoice: Invoice = {
+        id: `inv_${newOrder.id}`,
+        invoiceNumber: newOrder.invoiceNumber,
+        orderId: newOrder.id,
+        orderNumber: newOrder.orderNumber,
+        customerName: newOrder.customerName,
+        itemsSummary: newOrder.itemsSummary,
+        subtotalUsd: newOrder.subtotalUsd,
+        discountUsd: newOrder.discountUsd,
+        totalUsd: newOrder.totalUsd,
+        totalKhr: newOrder.totalKhr,
+        paymentMethod: 'សាច់ប្រាក់សុទ្ធ (Cash POS)',
+        paymentStatus: 'PAID',
+        bakongTransactionId: cashTxId,
+        issuedAt: nowIso,
+      };
+
+      seenInvoiceIdsRef.current.add(generatedInvoice.id);
+      await createInvoiceInDb(generatedInvoice);
+
+      if (soundEnabled) {
+        playOrderNotificationSound();
+      }
+
+      setCart([]);
+      setOrderNote('');
+      setAdminCashReceivedUsd('');
+      setAppliedPromo(null);
+      setPromoInput('');
+      setPromoFeedback('');
+      setRedeemLoyaltyReward(false);
+      setIsCartOpen(false);
+      setSelectedInvoice(generatedInvoice);
+    } finally {
+      setSubmittingOrder(false);
+    }
+  };
+
+  // Active Queue Orders for Live Queue Display Board
+  const preparingQueueOrders = useMemo(
+    () => orders.filter((o) => o.orderStatus === 'PAID' || o.orderStatus === 'PREPARING'),
+    [orders]
+  );
+  const readyQueueOrders = useMemo(
+    () => orders.filter((o) => o.orderStatus === 'COMPLETED').slice(0, 8),
+    [orders]
+  );
+
   const currentHero = HERO_SLIDES[activeSlide];
   const formattedTime = currentTime.toLocaleTimeString('en-US', {
     hour: '2-digit',
@@ -1259,6 +1513,29 @@ export default function App() {
                   </button>
                 ))}
 
+                {/* Favorites Filter Button */}
+                <button
+                  onClick={() => setSelectedCategoryId('FAVORITES')}
+                  className={`px-3.5 py-2 text-xs font-extrabold rounded-full transition-all whitespace-nowrap shrink-0 inline-flex items-center gap-1.5 ${
+                    selectedCategoryId === 'FAVORITES'
+                      ? 'bg-[#FACC15] text-[#0B0E14] shadow-[0_0_15px_rgba(250,204,21,0.35)]'
+                      : 'rgb-pill text-rose-300 hover:text-white'
+                  }`}
+                >
+                  <Heart className="w-3.5 h-3.5 fill-current" />
+                  <span>ចូលចិត្ត ({favoriteItemIds.length})</span>
+                </button>
+
+                {/* Smart Table Service Call & Wi-Fi Info Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsServiceModalOpen(true)}
+                  className="px-3.5 py-2 text-xs font-extrabold rounded-full rgb-pill text-[#FACC15] hover:text-white transition-all whitespace-nowrap shrink-0 inline-flex items-center gap-1.5"
+                >
+                  <Bell className="w-3.5 h-3.5 text-[#FACC15]" />
+                  <span>ហៅបុគ្គលិក & Wi-Fi</span>
+                </button>
+
                 {/* Currency Switcher (USD / KHR) */}
                 <div className="flex items-center rgb-pill rounded-full p-0.5">
                   <button
@@ -1335,13 +1612,29 @@ export default function App() {
                       }`}
                     >
                       <div>
-                        {/* Product Photo */}
+                        {/* Product Photo + Favorite Heart Button */}
                         <div className="aspect-16/10 w-full rounded-xl overflow-hidden bg-[#0E121A] relative">
                           <ProductImage
                             src={item.imageUrl}
                             alt={item.nameKh}
                             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                           />
+                          <button
+                            type="button"
+                            onClick={(e) => toggleFavoriteItem(item.id, e)}
+                            aria-label="រក្សាទុកមុខម្ហូបចូលចិត្ត"
+                            className={`absolute top-2.5 right-2.5 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md border transition-all ${
+                              favoriteItemIds.includes(item.id)
+                                ? 'bg-rose-600/90 border-rose-300 text-white shadow-md'
+                                : 'bg-black/55 border-white/20 text-white/80 hover:text-white'
+                            }`}
+                          >
+                            <Heart
+                              className={`w-4 h-4 ${
+                                favoriteItemIds.includes(item.id) ? 'fill-current' : ''
+                              }`}
+                            />
+                          </button>
                         </div>
 
                         {/* Title + Stock Status Row */}
@@ -1444,6 +1737,77 @@ export default function App() {
                   placeholder="ស្វែងរកលេខការកម្មង់ ឬឈ្មោះ..."
                   className="pl-9 pr-4 py-2 text-xs rgb-card-dark text-white rounded-xl w-64"
                 />
+              </div>
+            </div>
+
+            {/* Live Queue Display Board (អេក្រង់ហៅលេខកิวអតិថិជន៖ កំពុងឆុង vs រួចរាល់សម្រាប់ទទួល) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <div className="rgb-card rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#222938] pb-2.5">
+                  <div className="text-sm font-extrabold text-amber-300 flex items-center gap-2">
+                    <Coffee className="w-4 h-4 text-[#FACC15]" />
+                    <span>កំពុងរៀបចំឆុងភេសជ្ជៈ (Preparing Queue)</span>
+                  </div>
+                  <span className="text-xs font-extrabold text-[#FACC15] tabular-nums">
+                    {preparingQueueOrders.length} កម្មង់
+                  </span>
+                </div>
+                {preparingQueueOrders.length === 0 ? (
+                  <div className="text-xs text-slate-400 py-4 text-center">
+                    មិនទាន់មានភេសជ្ជៈកំពុងរង់ចាំឆុងនោះទេ
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {preparingQueueOrders.map((o) => (
+                      <div
+                        key={o.id}
+                        className="rgb-card-dark rounded-xl p-2.5 text-center border border-amber-500/40"
+                      >
+                        <div className="text-sm font-black text-[#FACC15] tabular-nums">
+                          {o.orderNumber.split('-').pop() || o.orderNumber}
+                        </div>
+                        <div className="text-[11px] font-semibold text-white truncate mt-0.5">
+                          {o.customerName}
+                        </div>
+                        <div className="text-[10px] text-amber-300 truncate">{o.tableOrType}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rgb-card rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between border-b border-[#222938] pb-2.5">
+                  <div className="text-sm font-extrabold text-emerald-400 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>រួចរាល់សម្រាប់ទទួល (Ready for Pickup / Served)</span>
+                  </div>
+                  <span className="text-xs font-extrabold text-emerald-400 tabular-nums">
+                    {readyQueueOrders.length} កម្មង់
+                  </span>
+                </div>
+                {readyQueueOrders.length === 0 ? (
+                  <div className="text-xs text-slate-400 py-4 text-center">
+                    មិនទាន់មានលេខកิวរួចរាល់នោះទេ
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                    {readyQueueOrders.map((o) => (
+                      <div
+                        key={o.id}
+                        className="rgb-card-dark rounded-xl p-2.5 text-center border border-emerald-500/50"
+                      >
+                        <div className="text-sm font-black text-emerald-400 tabular-nums">
+                          {o.orderNumber.split('-').pop() || o.orderNumber}
+                        </div>
+                        <div className="text-[11px] font-semibold text-white truncate mt-0.5">
+                          {o.customerName}
+                        </div>
+                        <div className="text-[10px] text-emerald-200 truncate">{o.tableOrType}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -1552,7 +1916,16 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleQuickReorder(order)}
+                            className="px-3 py-2 text-xs font-bold text-[#FACC15] rgb-pill rounded-xl hover:brightness-110 transition-all inline-flex items-center gap-1.5"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5 text-[#FACC15]" />
+                            <span>កម្មង់ម្ដងទៀត</span>
+                          </button>
+
                           {order.paymentStatus === 'PENDING' && (
                             <button
                               onClick={() => handleResumeKhqrForOrder(order)}
@@ -1562,7 +1935,16 @@ export default function App() {
                               <span>បង្ហាញ ABA / ACLEDA KHQR</span>
                             </button>
                           )}
-                          {/* Only Admin can pop up and print the receipt (បុង) */}
+                          {/* Only Admin can pop up and print Cup Stickers or the Receipt (បុង) */}
+                          {adminJwtToken && (
+                            <button
+                              onClick={() => setStickerOrder(order)}
+                              className="px-3 py-2 text-xs font-bold text-[#FACC15] bg-[#1C2230] border border-[#FACC15]/50 rounded-xl hover:bg-[#252D3F] transition-all inline-flex items-center gap-1.5"
+                            >
+                              <Tag className="w-3.5 h-3.5 text-[#FACC15]" />
+                              <span>ស្ទីគ័រកែវ</span>
+                            </button>
+                          )}
                           {adminJwtToken && linkedInvoice && (
                             <button
                               onClick={() => setSelectedInvoice(linkedInvoice)}
@@ -1667,6 +2049,11 @@ export default function App() {
               loyaltyMembers={loyaltyMembers}
               expenses={expenses}
               onSelectInvoice={(inv) => setSelectedInvoice(inv)}
+              onSelectStickerOrder={(ord) => setStickerOrder(ord)}
+              tableServiceCalls={tableServiceCalls}
+              onResolveTableCall={(id) =>
+                setTableServiceCalls((prev) => prev.filter((c) => c.id !== id))
+              }
               jwtToken={adminJwtToken}
               setJwtToken={setAdminJwtToken}
               adminUser={adminUser}
@@ -1689,6 +2076,11 @@ export default function App() {
             loyaltyMembers={loyaltyMembers}
             expenses={expenses}
             onSelectInvoice={(inv) => setSelectedInvoice(inv)}
+            onSelectStickerOrder={(ord) => setStickerOrder(ord)}
+            tableServiceCalls={tableServiceCalls}
+            onResolveTableCall={(id) =>
+              setTableServiceCalls((prev) => prev.filter((c) => c.id !== id))
+            }
             jwtToken={adminJwtToken}
             setJwtToken={setAdminJwtToken}
             adminUser={adminUser}
@@ -2074,6 +2466,73 @@ export default function App() {
                         {formatDisplayPrice(cartSummary.totalUsd)})
                       </span>
                     </button>
+
+                    {/* Admin-Only Instant Cash Checkout & Change Calculator */}
+                    {adminJwtToken && (
+                      <div className="pt-2 mt-1 border-t border-[#222938] space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 text-[11px]">
+                          <span className="font-bold text-emerald-400 flex items-center gap-1">
+                            <Banknote className="w-3.5 h-3.5" />
+                            <span>គិតលុយសាច់ប្រាក់ (Admin Cash POS):</span>
+                          </span>
+                          <div className="flex items-center gap-1">
+                            {[cartSummary.totalUsd, 5, 10, 20].map((amt, i) => (
+                              <button
+                                key={i}
+                                type="button"
+                                onClick={() => setAdminCashReceivedUsd(amt.toFixed(2))}
+                                className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-[#1A202E] text-[#FACC15] border border-[#FACC15]/30 tabular-nums"
+                              >
+                                ${amt.toFixed(i === 0 ? 2 : 0)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="number"
+                            step="0.05"
+                            min="0"
+                            value={adminCashReceivedUsd}
+                            onChange={(e) => setAdminCashReceivedUsd(e.target.value)}
+                            placeholder={`ប្រាក់ទទួល ($${cartSummary.totalUsd.toFixed(2)})`}
+                            className="w-36 px-2.5 py-1.5 text-xs bg-[#131722] text-white border border-[#2A3241] rounded-lg tabular-nums"
+                          />
+                          <div className="flex-1 text-[11px] text-right tabular-nums">
+                            <span className="text-slate-400">ប្រាក់អាប់៖ </span>
+                            <strong className="text-emerald-400">
+                              {formatUsd(
+                                Math.max(
+                                  0,
+                                  (parseFloat(adminCashReceivedUsd) || cartSummary.totalUsd) -
+                                    cartSummary.totalUsd
+                                )
+                              )}
+                            </strong>{' '}
+                            <span className="text-slate-400">
+                              (
+                              {formatKhr(
+                                Math.max(
+                                  0,
+                                  (parseFloat(adminCashReceivedUsd) || cartSummary.totalUsd) -
+                                    cartSummary.totalUsd
+                                )
+                              )}
+                              )
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={submittingOrder}
+                          onClick={handleAdminCashCheckout}
+                          className="w-full py-2 px-3 text-xs font-extrabold text-[#0B0E14] bg-emerald-400 hover:bg-emerald-300 rounded-xl transition-all flex items-center justify-center gap-1.5"
+                        >
+                          <Printer className="w-3.5 h-3.5 text-[#0B0E14]" />
+                          <span>ទទួលសាច់ប្រាក់ & ចេញបុងភ្លាម (Admin Cash)</span>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
@@ -2115,6 +2574,143 @@ export default function App() {
         invoice={adminJwtToken ? selectedInvoice : null}
         onClose={() => setSelectedInvoice(null)}
       />
+
+      {/* =====================================================================
+          BARISTA CUP STICKER / LABEL PRINTER MODAL (ADMIN ONLY)
+         ===================================================================== */}
+      <CupStickerModal
+        order={adminJwtToken ? stickerOrder : null}
+        onClose={() => setStickerOrder(null)}
+      />
+
+      {/* =====================================================================
+          SMART TABLE SERVICE CALL (ហៅបុគ្គលិកពីតុ) & STORE WI-FI MODAL
+         ===================================================================== */}
+      {isServiceModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
+          <div className="w-full max-w-md rgb-modal rounded-2xl overflow-hidden text-white">
+            <div className="px-5 py-4 bg-[#0B0E14] flex items-center justify-between border-b border-[#222938]">
+              <div className="flex items-center gap-2.5">
+                <Bell className="w-5 h-5 text-[#FACC15]" />
+                <div>
+                  <h3 className="text-sm font-extrabold text-[#FACC15]">
+                    សេវាកម្មប្រចាំតុ & Wi-Fi ហាង «រំដួលកាហ្វេ»
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    ហៅបុគ្គលិកមកកាន់តុរបស់អ្នក ឬភ្ជាប់អ៊ីនធឺណិតឥតគិតថ្លៃ
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsServiceModalOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="rgb-line" />
+
+            <div className="p-5 space-y-5">
+              {/* Store Free Wi-Fi Card */}
+              <div className="rgb-card-dark rounded-xl p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-extrabold text-[#FACC15] flex items-center gap-1.5">
+                    <Wifi className="w-4 h-4 text-emerald-400" />
+                    <span>ប្រព័ន្ធ Wi-Fi ហាងឥតគិតថ្លៃ (High-Speed 5G)</span>
+                  </span>
+                  <span className="text-[10px] text-emerald-400 font-bold">ឥតគិតថ្លៃ</span>
+                </div>
+                <div className="flex items-center justify-between text-xs bg-[#0B0E14] border border-[#262E3D] rounded-lg px-3 py-2">
+                  <div>
+                    <div className="text-slate-400 text-[11px]">
+                      ឈ្មោះ Wi-Fi: <strong className="text-white">Romdoul_Caffee_5G</strong>
+                    </div>
+                    <div className="text-slate-400 text-[11px] mt-0.5">
+                      លេខសម្ងាត់ (Password):{' '}
+                      <strong className="text-[#FACC15] tabular-nums">romdoul2026</strong>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard?.writeText('romdoul2026');
+                      setWifiCopied(true);
+                      setTimeout(() => setWifiCopied(false), 2500);
+                    }}
+                    className="px-2.5 py-1.5 text-[11px] font-bold rounded-lg bg-[#FACC15] text-[#0B0E14] inline-flex items-center gap-1"
+                  >
+                    <Copy className="w-3 h-3" />
+                    <span>{wifiCopied ? 'បានចម្លង!' : 'ចម្លងលេខសម្ងាត់'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Call Waiter / Table Request Form */}
+              <form onSubmit={handleSendTableServiceCall} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">
+                    ជ្រើសរើសលេខតុរបស់អ្នក
+                  </label>
+                  <select
+                    value={qrScannedTable ? `តុលេខ ${qrScannedTable}` : serviceTableNum}
+                    onChange={(e) => setServiceTableNum(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-[#0B0E14] text-white border border-[#2A3241] rounded-xl"
+                  >
+                    {Array.from({ length: 15 }, (_, i) =>
+                      String(i + 1).padStart(2, '0')
+                    ).map((num) => (
+                      <option key={num} value={`តុលេខ ${num}`}>
+                        តុលេខ {num}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    ជ្រើសរើសសេវាកម្មដែលអ្នកត្រូវការ
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      'សុំទឹកកកបន្ថែម (Extra Ice)',
+                      'សុំក្រដាសជូតមាត់ (Napkins)',
+                      'សុំសម្អាតតុ (Clean Table)',
+                      'ហៅបុគ្គលិកគិតលុយសាច់ប្រាក់',
+                    ].map((req) => (
+                      <button
+                        key={req}
+                        type="button"
+                        onClick={() => setServiceRequestType(req)}
+                        className={`p-2.5 rounded-xl text-xs font-bold text-left border transition-all ${
+                          serviceRequestType === req
+                            ? 'bg-[#FACC15] text-[#0B0E14] border-[#FACC15]'
+                            : 'bg-[#0B0E14] text-slate-200 border-[#262E3D] hover:border-[#FACC15]/50'
+                        }`}
+                      >
+                        {req}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {serviceFeedback && (
+                  <div className="p-2.5 rounded-xl bg-emerald-950/70 border border-emerald-500/50 text-xs text-emerald-200 font-semibold">
+                    {serviceFeedback}
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 px-4 text-xs font-extrabold text-[#0B0E14] bg-gradient-to-r from-[#FACC15] to-[#F59E0B] rounded-xl hover:brightness-105 transition-all flex items-center justify-center gap-2"
+                >
+                  <Bell className="w-4 h-4 text-[#0B0E14]" />
+                  <span>ផ្ញើសំណើហៅបុគ្គលិកឥឡូវនេះ</span>
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* =====================================================================
           RGB NEON FOOTER (រំដួលកាហ្វេ · ROMDOUL CAFFEE)

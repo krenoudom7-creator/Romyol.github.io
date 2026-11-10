@@ -35,30 +35,27 @@ interface AdminAccount {
   updatedAt: string;
 }
 
-const configuredUsername = (process.env.ADMIN_DEFAULT_USERNAME || 'admin').trim();
-const configuredPassword = (process.env.ADMIN_DEFAULT_PASSWORD || 'Vomyol@2026').trim();
+const configuredUsername = (process.env.ADMIN_DEFAULT_USERNAME || 'Udomst').trim();
+const configuredPassword = (process.env.ADMIN_DEFAULT_PASSWORD || 'udom26').trim();
 
 // Maintain hashed accounts for both the user's configured secret credentials and the default fallback
 let adminAccounts: AdminAccount[] = [
   {
     username: configuredUsername,
-    passwordHash: bcrypt.hashSync(configuredPassword, 12),
+    passwordHash: bcrypt.hashSync(configuredPassword, 8),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    username: 'Udomst',
+    passwordHash: bcrypt.hashSync('udom26', 8),
+    updatedAt: new Date().toISOString(),
+  },
+  {
+    username: 'admin',
+    passwordHash: bcrypt.hashSync('Vomyol@2026', 8),
     updatedAt: new Date().toISOString(),
   },
 ];
-
-if (configuredUsername.toLowerCase() !== 'admin' || configuredPassword !== 'Vomyol@2026') {
-  adminAccounts.push({
-    username: 'admin',
-    passwordHash: bcrypt.hashSync('Vomyol@2026', 12),
-    updatedAt: new Date().toISOString(),
-  });
-  adminAccounts.push({
-    username: 'admin',
-    passwordHash: bcrypt.hashSync(configuredPassword, 12),
-    updatedAt: new Date().toISOString(),
-  });
-}
 
 // Server-side registry of generated KHQR sessions for strict amount/MD5/orderNumber verification
 interface KhqrSession {
@@ -180,6 +177,7 @@ function requireAdminJwt(req: Request, res: Response, next: NextFunction) {
 
 async function startServer() {
   const app = express();
+  app.set('trust proxy', 1);
 
   // Security headers via Helmet (relaxed CSP for Vite & Firebase SDK in preview environment)
   app.use(
@@ -193,12 +191,13 @@ async function startServer() {
   app.use(cors());
   app.use(express.json({ limit: '5mb' }));
 
-  // Rate limiting for API endpoints
+  // Rate limiting for API endpoints (configured for reverse-proxy / Cloud Run headers)
   const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 300,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: false,
     message: { error: 'សំណើច្រើនពេក សូមព្យាយាមម្ដងទៀតនៅពេលក្រោយ។' },
   });
   app.use('/api/', apiLimiter);
